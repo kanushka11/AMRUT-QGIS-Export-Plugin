@@ -1,0 +1,238 @@
+from qgis.PyQt.QtWidgets import (
+    QInputDialog, 
+    QListWidget, 
+    QListWidgetItem, 
+    QDialog, 
+    QVBoxLayout, 
+    QPushButton, 
+    QHBoxLayout,
+    QLabel,QRadioButton, 
+    QComboBox, 
+    QSpinBox,
+    )
+from qgis.core import (
+    QgsProcessingFeatureSourceDefinition,
+    QgsVectorLayer,
+    QgsRasterLayer,
+    QgsWkbTypes,
+    QgsProject,
+    QgsRectangle,
+    QgsField,
+    QgsFeature,
+    QgsGeometry,
+    QgsProcessingFeedback,
+    QgsSpatialIndex, 
+    QgsPalLayerSettings, 
+    QgsTextFormat, 
+    QgsVectorLayerSimpleLabeling
+)
+from qgis.PyQt.QtGui import QIcon, QFont, QPixmap
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QVariant,Qt
+from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QProgressDialog
+
+import processing
+import os
+
+selectedLayer = None
+gridLayer = None
+
+
+def getLayerSelectionLayout(parent,allLayers, selectedLayers) :
+    
+    selectionLayout = QVBoxLayout()
+    selectionLayout.setParent(parent)
+    logo_layout = createLogoLayout()
+    selectionLayout.addLayout(logo_layout)
+
+    # Add list widget to show layers
+    layer_list_widget = QListWidget()
+    for layer in allLayers:
+        item = QListWidgetItem(layer.name())
+        item.setCheckState(Qt.Unchecked)
+        layer_list_widget.addItem(item)
+
+    selectionLayout.addWidget(layer_list_widget)
+
+    # Collect selected layers
+    for i in range(layer_list_widget.count()):
+        item = layer_list_widget.item(i)
+        if item.checkState() == Qt.Checked:
+            layer_name = item.text()
+            for layer in allLayers:
+                if layer.name() == layer_name:
+                    selectedLayers.append(layer)
+                    break
+    return selectionLayout
+
+def getGridLayerInput(selectedLayersName, allLayers) :
+    gridLayerSlectionDialog = QDialog()
+    gridLayerSlectionDialog.setWindowTitle("Provide Grid")
+    gridLayerSlectionDialog.setMinimumSize(400,400)
+    dialogLayout = QVBoxLayout()
+
+    logolayout = createLogoLayout()
+    selectedLayersDisplayLayout = getListLayout(selectedLayersName, "Selected Layers")
+    dialogLayout.addLayout(logolayout)
+    dialogLayout.addLayout(selectedLayersDisplayLayout)
+
+    question = "Do you already have grid / segmentation Layer to clip ?"
+    questoionLable = QLabel(question)
+    
+    radio_layout = QHBoxLayout()
+    yes_radio = QRadioButton("Yes")
+    no_radio = QRadioButton("No")
+    radio_layout.addWidget(yes_radio)
+    radio_layout.addWidget(no_radio)
+
+    dialogLayout.addLayout(questoionLable)
+    dialogLayout.addLayout(radio_layout)
+
+    dropdown_lable = QLabel("")
+    dropdown_lable.setVisible(False)
+    layer_dropdown = QComboBox()
+    layer_map = {}
+    
+    for layer in QgsProject.instance().mapLayers().values():
+        layer_dropdown.addItem(layer.name())
+        layer_map[layer.name()] = layer
+
+    def on_layer_selected(index):
+        global selectedLayer
+        selected_layer_name = layer_dropdown.itemText(index)
+        selectedLayer = layer_map.get(selected_layer_name)
+
+    layer_dropdown.currentIndexChanged.connect(on_layer_selected)
+    layer_dropdown.setVisible(False) 
+
+    number_input = QSpinBox()
+    number_input.setRange(100, 10000)  # Set range as needed
+    number_input.setVisible(False)  # Initially hidden
+
+    number_label = QLabel("Input Grid Size")  # To be shown with number input
+    number_label.setVisible(False)
+
+    dialogLayout.addWidget(layer_dropdown)
+    dialogLayout.addWidget(number_label)
+    dialogLayout.addWidget(number_input)
+
+    def on_radio_button_toggled():
+        if yes_radio.isChecked():
+            layer_dropdown.setVisible(True)
+            dropdown_lable.setText("Selelet Grid / Segmentation Layer : ")
+            dropdown_lable.setVisible(True)
+            number_input.setVisible(False)
+            number_label.setVisible(False)
+        elif no_radio.isChecked():
+            layer_dropdown.setVisible(True)
+            dropdown_lable.setText("Selelet Area Boundary Layer : ")
+            dropdown_lable.setVisible(True)
+            number_input.setVisible(True)
+            number_label.setVisible(True)
+    
+    yes_radio.toggled.connect(on_radio_button_toggled)
+    no_radio.toggled.connect(on_radio_button_toggled)
+
+    def on_accept_input() :
+        if selectedLayer is None : 
+            showErrorDialog("No Layer Selected")
+        else :
+            if yes_radio.isChecked() : 
+                global gridLayer
+                gridLayer = selectedLayer
+            
+            if no_radio.isChecked() : 
+                grid_size = number_input.value()
+                boundaryLayer = selectedLayer
+
+
+
+
+
+
+    
+    
+
+def getListLayout(itemList, lable) : 
+    layout = QVBoxLayout()
+    
+    list_lable = QLabel(lable + ":")
+    layout.addWidget(list_lable)
+    
+    list_widget = QListWidget()
+    layout.addWidget(list_widget)
+    
+    for item in itemList:
+        list_widget.addItem(item)
+    
+    return layout
+
+def createLogoLayout():
+    pwd = os.path.dirname(os.path.abspath(__file__))
+    assets_dir = os.path.join(pwd, "assets")
+    logo1_name = 'iirs.png'
+    logo2_name = 'amrut.png'
+    logo_size = (50, 50)
+    label_text = "Export Data for Mobile App" 
+
+    logo1_path = os.path.join(assets_dir, logo1_name)
+    logo2_path = os.path.join(assets_dir, logo2_name)
+
+    # Debugging: Check paths
+    print(f"Logo 1 Path: {logo1_path}")
+    print(f"Logo 2 Path: {logo2_path}")
+
+    # Check if files exist
+    if not os.path.exists(logo1_path) or not os.path.exists(logo2_path):
+        QMessageBox.critical(None, "Error", f"Logos not found!\n{logo1_path}\n{logo2_path}")
+        return QHBoxLayout()
+
+    logo_layout = QHBoxLayout()
+
+    logo1_label = QLabel()
+    logo2_label = QLabel()
+    text_label = QLabel(label_text)
+
+    # Load logos
+    logo1_pixmap = QPixmap(logo1_path).scaled(logo_size[0], logo_size[1], Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    logo2_pixmap = QPixmap(logo2_path).scaled(logo_size[0], logo_size[1], Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+    # Debugging: Check pixmap validity
+    if not logo1_pixmap or logo1_pixmap.isNull():
+        logo1_label.setText("Logo 1 Missing")
+    else:
+        logo1_label.setPixmap(logo1_pixmap)
+
+    if not logo2_pixmap or logo2_pixmap.isNull():
+        logo2_label.setText("Logo 2 Missing")
+    else:
+        logo2_label.setPixmap(logo2_pixmap)
+    
+    font = QFont()
+    font.setBold(True)
+    font.setUnderline(True)
+    text_label.setFont(font)
+    text_label.setContentsMargins(10, 10, 10, 10)
+    
+    text_label.setAlignment(Qt.AlignCenter)
+    logo1_label.setAlignment(Qt.AlignCenter)
+    logo2_label.setAlignment(Qt.AlignCenter)
+
+    logo_layout.addWidget(logo1_label)
+    logo_layout.addStretch()
+    logo_layout.addWidget(text_label)
+    logo_layout.addStretch()
+    logo_layout.addWidget(logo2_label)
+
+    return logo_layout
+
+def showErrorDialog(message) :
+    dialog = QDialog()
+    dialog.setWindowTitle("Error")
+    layout = QVBoxLayout()
+    message = QLabel(message)
+    message.setWordWrap(True)
+    close = QPushButton("Close")
+    close.clicked.connect(dialog.close())
+    layout.addLayout(message)
+    layout.addLayout(close)
+    dialog.exec_()
