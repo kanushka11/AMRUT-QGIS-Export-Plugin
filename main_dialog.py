@@ -135,6 +135,7 @@ class ClipMergeExportTabDialog(QDialog):
             global selectedLayerForGrid
             selected_layer_name = self.layer_dropdown.itemText(index)
             selectedLayerForGrid = self.layer_map.get(selected_layer_name)
+            QgsMessageLog.logMessage('Layer Selected :'+selectedLayerForGrid.name(), 'MyPlugin', Qgis.Info)
 
         self.layer_dropdown.currentIndexChanged.connect(on_layer_selected)
         self.layer_dropdown.setVisible(False) 
@@ -301,14 +302,13 @@ class ClipMergeExportTabDialog(QDialog):
 
                 if self.no_radio.isChecked() :
                     #get grid input and admin boundary and then create grid
-                    grid_layer = selectedLayerForGrid
-                    temp_layer = geometry.deep_copy_layer(grid_layer)
+                    gridLayer = selectedLayerForGrid
                     self.next_button.setEnabled(False)
                     self.progress_bar.setRange(0, 0)  # Indeterminate state
                     print("Grid Size : "+ str(self.number_input.value()))
                     self.progress_lable.setText("Creating Layer...")
                     self.thread = QThread()
-                    self.gridLayerCreationWorker = workers.GridLayerCeationWorker(selectedLayers,temp_layer, self.number_input.value())
+                    self.gridLayerCreationWorker = workers.GridLayerCeationWorker(selectedLayers,gridLayer, self.number_input.value())
                     self.gridLayerCreationWorker.moveToThread(self.thread)
                     self.thread.started.connect(self.gridLayerCreationWorker.run)
                     self.gridLayerCreationWorker.finished.connect(self.thread.quit)
