@@ -9,20 +9,29 @@ from qgis.core import (
     QgsField,
     QgsFeature,
     QgsGeometry,
+    QgsVectorFileWriter,
     QgsProcessingFeedback,
     QgsSpatialIndex, 
     QgsPalLayerSettings, 
     QgsTextFormat, 
-    QgsVectorLayerSimpleLabeling
+    QgsVectorLayerSimpleLabeling,
+    QgsVectorDataProvider,
+    QgsRectangle,
+    QgsCoordinateReferenceSystem,
+    QgsCoordinateTransform,
+    QgsVectorLayerUtils
 )
 from qgis.PyQt.QtGui import QIcon, QFont
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QVariant,Qt
 from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QProgressDialog
+from .import geometry
+import os
+import uuid
 
-def create_500m_grid(bbox, grid_size=500, crs='EPSG:32644'):
+def create_grid_layer(bbox, grid_size, crs='EPSG:32644'):
     """Create a 500m x 500m grid covering the bounding box."""
     xmin, ymin, xmax, ymax = bbox
-    grid_layer = QgsVectorLayer("Polygon?crs={}".format(crs), "500m Grid", "memory")
+    grid_layer = QgsVectorLayer("Polygon?crs={}".format(crs), "Grid", "memory")
     provider = grid_layer.dataProvider()
 
     # Define the fields for the layer
@@ -74,3 +83,101 @@ def add_grid_labels(grid_layer):
 
     # Step 4: Refresh the layer to apply the changes
     grid_layer.triggerRepaint()
+
+def create_grid_within_single_polygon(selectedLayers,polygon_layer, grid_size, crs='EPSG:32644'):
+    """
+    Create a grid covering only a single polygon geometry.
+
+    :param polygon_layer: QgsVectorLayer containing one polygon geometry.
+    :param grid_size: Size of the grid cells (e.g., 500 for 500m x 500m).
+    :param crs: CRS for the output grid layer (default EPSG:32644).
+    :return: QgsVectorLayer with the generated grid.
+    """
+    try:
+        error = geometry.validate_layer(polygon_layer)
+        if error :
+            msg = "Error :\n" + "\n".join( [f"{error_msg}" for error_msg in error])
+            raise Exception(msg)
+        
+        if not polygon_layer.isValid():
+            raise ValueError("Invalid polygon layer provided")
+
+        # Extract the polygon geometry
+        features = list(polygon_layer.getFeatures())
+        if len(features) != 1:
+            raise ValueError("Layer must contain exactly one polygon feature")
+        polygon_geom = features[0].geometry()
+
+        if polygon_geom is None or polygon_geom.isEmpty():
+            raise ValueError("Polygon geometry is empty or invalid")
+
+        # Generate the grid cells and clip them to the polygon geometry
+        combined_extent = geometry.getExtent(selectedLayers)
+        grid_layer = create_grid_layer(combined_extent.toRectF().getCoords(),grid_size, crs)
+
+        polygon_crs = polygon_layer.crs()
+        grid_crs = grid_layer.crs()
+        if polygon_crs != grid_crs:
+            transform = QgsCoordinateTransform(polygon_crs, grid_crs, QgsProject.instance())
+            polygon_geom.transform(transform)
+        
+        unique_id = str(uuid.uuid4())
+        clipped_grid_layer = QgsVectorLayer("Polygon?crs={}".format(crs), unique_id, "memory")
+
+        provider = clipped_grid_layer.dataProvider()
+        provider.addAttributes(grid_layer.fields())
+        clipped_grid_layer.updateFields()
+
+        for grid_feature in grid_layer.getFeatures():
+            grid_geom = grid_feature.geometry()
+            if grid_geom.intersects(polygon_geom):
+                clipped_geom = grid_geom.intersection(polygon_geom)
+                if not clipped_geom.isEmpty():
+                    clipped_feature = QgsFeature()
+                    clipped_feature.setGeometry(clipped_geom)
+                    clipped_feature.setAttributes(grid_feature.attributes())
+                    provider.addFeature(clipped_feature)
+
+        clipped_grid_layer.updateExtents()
+        error = geometry.validate_layer(clipped_grid_layer)
+       
+        if not error :
+            file_path = getFilePath(unique_id)
+            save_file_to_disk(layer = clipped_grid_layer, file_path=file_path)
+            grid_layer = clipped_grid_layer = QgsVectorLayer(file_path + ".gpkg", unique_id, "ogr")
+            QgsProject.instance().addMapLayer(grid_layer)
+            return unique_id
+        else :
+            msg = "Error :\n" + "\n".join( [f"{error_msg}" for error_msg in error])
+            raise Exception(msg)
+
+    except Exception as e:
+        raise Exception(f"Error during grid creation: {str(e)}")
+
+def getFilePath(file_name) :
+    project = QgsProject.instance()
+
+# Get the project file path (if it's saved)
+    project_file_path = project.fileName()
+
+    # Get the directory where the project file is located
+    project_directory = os.path.dirname(project_file_path) if project_file_path else os.path.expanduser("~")
+    
+    # Ensure the directory exists
+    if not os.path.exists(project_directory):
+        os.makedirs(project_directory)
+
+    
+    return os.path.join(project_directory, file_name)
+
+def save_file_to_disk (file_path, layer) :
+    options = QgsVectorFileWriter.SaveVectorOptions()
+
+# Set the CRS transformation context (optional)
+    error = QgsVectorFileWriter.writeAsVectorFormatV2(
+        layer=layer,
+        fileName = file_path,
+        transformContext= QgsProject.instance().transformContext(),
+        options =options,  
+    )
+

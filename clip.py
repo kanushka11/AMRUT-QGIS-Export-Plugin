@@ -22,7 +22,7 @@ import os
 
 
 
-def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_dialog):
+def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
     """Clip all layers by grid cells with a progress dialog."""
     feedback = QgsProcessingFeedback()
 
@@ -30,16 +30,11 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_dialog):
     if not os.path.exists(output_base_dir):
         os.makedirs(output_base_dir)
 
-    total_features = grid_layer.featureCount()
-    current_progress = 2  # Progress already at 2 steps
 
     for i, feature in enumerate(grid_layer.getFeatures()):
-        current_step = current_progress + i
-        progress_dialog.setValue(current_step)
-        progress_dialog.setLabelText(f"Clipping layers for grid cell {i + 1}/{total_features}...")
-        if progress_dialog.wasCanceled():
-            QMessageBox.warning(None, "Process Canceled", "The clipping process was canceled.")
-            break
+        current_step = i
+        progress_signal.emit(current_step)
+
 
         grid_cell_geom = feature.geometry()
         grid_cell_id = feature["id"]
@@ -66,8 +61,15 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_dialog):
         temp_layer_data.addFeatures([temp_feature])
         temp_layer.updateExtents()
 
+        clipped_layers = {
+            "Point": [],
+            "Line": [],
+            "Polygon": []
+        }
+
         for layer in layers:
-            if layer.type() == QgsVectorLayer.VectorLayer:
+            if layer.type() == QgsVectorLayer.VectorLayer:  # Handle vector layers
+                geometry_type = QgsWkbTypes.flatType(layer.wkbType())
                 output_path = os.path.join(grid_dir, f"{layer.name()}_clipped.geojson")
                 clip_params = {
                     'INPUT': layer,
@@ -76,10 +78,59 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_dialog):
                 }
                 try:
                     processing.run("qgis:clip", clip_params, feedback=feedback)
+                    if geometry_type == QgsWkbTypes.MultiPoint or geometry_type == QgsWkbTypes.Point:
+                        clipped_layers["Point"].append(output_path)
+                    elif geometry_type == QgsWkbTypes.MultiLineString or geometry_type == QgsWkbTypes.LineString:
+                        clipped_layers["Line"].append(output_path)
+                    elif geometry_type == QgsWkbTypes.MultiPolygon or geometry_type == QgsWkbTypes.Polygon:
+                        clipped_layers["Polygon"].append(output_path)
                 except Exception as e:
-                    QMessageBox.warning(None, "Error", f"Error clipping layer '{layer.name()}' with grid cell {grid_cell_id}: {e}")
+                    QMessageBox.warning(None, "Error", f"Error clipping vector layer '{layer.name()}' with grid cell {grid_cell_id}: {e}")
+        
+            elif layer.type() == QgsRasterLayer.RasterLayer:  # Handle raster layers
+                output_path = os.path.join(grid_dir, f"{layer.name()}_clipped.tif")
+                clip_params = {
+                    'INPUT': layer.source(),
+                    'MASK': temp_layer,
+                    'OUTPUT': output_path,
+                    'NODATA': -9999  # Define nodata value if needed
+                }
+                try:
+                    processing.run("gdal:cliprasterbymasklayer", clip_params, feedback=feedback)
+                except Exception as e:
+                    QMessageBox.warning(None, "Error", f"Error clipping raster layer '{layer.name()}' with grid cell {grid_cell_id}: {e}")
+        
+        geometry_output_files = {
+            "Point": os.path.join(grid_dir, "point.geojson"),
+            "Line": os.path.join(grid_dir, "line.geojson"),
+            "Polygon": os.path.join(grid_dir, "polygon.geojson")
+        }
+        for geometry_type, layer_paths in clipped_layers.items():
+            if(layer_paths) :
+                merge_clipped_layers(layer_paths, geometry_output_files[geometry_type], geometry_type, "EPSG:4326")
+                removeFiles(layer_paths)
+        
 
-    progress_dialog.setValue(current_progress + total_features)
+        
+
+def merge_clipped_layers (layers_path, merged_layer_path, geometry_type,crs) : 
+    feedback = QgsProcessingFeedback()
+    merge_params = {
+            'LAYERS': layers_path,
+            'CRS': crs,
+            'OUTPUT': merged_layer_path
+    }
+    try:
+            processing.run("qgis:mergevectorlayers", merge_params, feedback = feedback)
+    except Exception as e:
+            QMessageBox.warning(None, "Error", f"Error merging {geometry_type} layers: {e}")
+
+def removeFiles(filePaths) :
+    for file_path in filePaths:
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            raise Exception(f"Error deleting {file_path}: {e}")
 
 
 def check_geometries_and_extents(layers):
