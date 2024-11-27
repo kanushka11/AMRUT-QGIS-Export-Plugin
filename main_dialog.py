@@ -201,18 +201,20 @@ class ClipMergeExportTabDialog(QDialog):
 
         try:
             if hasattr(self, "output_dir"):
+                    global gridLayer
+                    self.progress_lable.setText("Clipping...Please Wait")
+                    self.progress_bar.setMaximum(gridLayer.featureCount())
                     self.thread = QThread()
-                    self.clipWorker = workers.ClippingWorker(selectedLayers,temp_layer, self.number_input.value())
+                    self.clipWorker = workers.ClippingWorker(gridLayer, selectedLayers, self.output_dir)
                     self.clipWorker.moveToThread(self.thread)
                     self.thread.started.connect(self.clipWorker.run)
                     self.clipWorker.finished.connect(self.thread.quit)
-                    self.clipWorker.finished.connect(self.gridLayerCreationWorker.deleteLater)
+                    self.clipWorker.finished.connect(self.clipWorker.deleteLater)
                     self.thread.finished.connect(self.thread.deleteLater)
-                    self.clipWorker.layer_signal.connect(self.handle_grid_creation_result)
+                    self.clipWorker.success_signal.connect(self.handle_clip_success)
+                    self.clipWorker.progress_signal.connect(self.update_clipping_progress)
                     self.clipWorker.error_signal.connect(self.show_error)
                     self.thread.start()
-                    clip.clip_layers_to_grid(gridLayer, selectedLayers, self.output_dir,self.progress_bar, self.progress_lable)
-                    QMessageBox.information(self, "Clipping Complete", "Layers clipped and exported successfully.")
             else:
                 QMessageBox.warning(self, "Error", "Output directory not selected.")
 
@@ -389,6 +391,13 @@ class ClipMergeExportTabDialog(QDialog):
             if layer.name() == layer_name:  # Check if the layer name matches
                 return layer
         return None  
+    
+    def handle_clip_success(self, success) :
+        if success :
+             QMessageBox.information(self, "Clipping", "Clipping completed")
+    
+    def update_clipping_progress (self, progress) :
+        self.progress_bar.setValue(progress)
 
     
 
