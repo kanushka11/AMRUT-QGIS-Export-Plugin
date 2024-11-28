@@ -106,9 +106,12 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
             "Polygon": os.path.join(grid_dir, "polygon.geojson")
         }
         for geometry_type, layer_paths in clipped_layers.items():
-            if(layer_paths) :
+            if layer_paths :
                 merge_clipped_layers(layer_paths, geometry_output_files[geometry_type], geometry_type, "EPSG:4326")
-                removeFiles(layer_paths)
+
+        for geometry_type, layer_paths in clipped_layers.items() :
+            removeFiles(layer_paths)
+
         
 
         
