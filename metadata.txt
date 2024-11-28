@@ -3,17 +3,17 @@
 # This file should be included when you package your plugin.# Mandatory items:
 
 [general]
-name=ClipMergeExport
+name=AMRUT 2.0 Export Data
 qgisMinimumVersion=3.0
-description=Clips layers to a 500m grid, merges geometry, and exports as GeoJSON and PNG.
+description=Clips layers to a desired grid, merges geometry, and exports as GeoJSON and PNG.
 version=0.1
-author=Shubhangam
-email=shubhangam_g@iirs.gov.in
+author=Shubhangam Garg
+email=amrut@iirs.gov.in
 
-about=Provide a brief description of the plugin and its purpose.
+about= Implemented for Export data to Mobile App for  Attribute collection under AMRUT 2.0
 
-tracker=http://bugs
-repository=http://repo
+tracker=https://git.iirs.gov.in/amrut/amrut_qgis_export_plugin/-/issues
+repository=https://git.iirs.gov.in/amrut/amrut_qgis_export_plugin/
 # End of mandatory metadata
 
 # Recommended items:
@@ -25,7 +25,7 @@ hasProcessingProvider=no
 # Tags are comma separated with spaces allowed
 tags=python
 
-homepage=http://homepage
+homepage=https://amrut.iirs.gov.in/
 category=Plugins
 icon=icon.png
 # experimental flag

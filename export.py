@@ -1,26 +1,6 @@
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QVariant,Qt
 from qgis.PyQt.QtGui import QIcon, QFont
 from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QProgressDialog, QDialog
-from qgis.core import (
-    QgsProcessingFeatureSourceDefinition,
-    QgsVectorLayer,
-    QgsRasterLayer,
-    QgsWkbTypes,
-    QgsProject,
-    QgsRectangle,
-    QgsField,
-    QgsFeature,
-    QgsGeometry,
-    QgsProcessingFeedback,
-    QgsSpatialIndex, 
-    QgsPalLayerSettings, 
-    QgsTextFormat, 
-    QgsVectorLayerSimpleLabeling
-)
-from . import clip
-from . import grid
-from . import geometry
-from . import ui
 from . import main_dialog
 
 

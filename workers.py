@@ -90,7 +90,7 @@ class ClippingWorker(QObject):
         try:
             # Example: Validate layers (replace with your own validation code)
             QgsMessageLog.logMessage('Creating Grid Layer', 'MyPlugin', Qgis.Info)  # Check if the task is started
-            clip.clip_layers_to_grid(grid_layer= self.gridLayer, layers= self.selectedLayers, progress_signal= self.progress_signal)
+            clip.clip_layers_to_grid(grid_layer= self.gridLayer, layers= self.selectedLayers, progress_signal= self.progress_signal, output_base_dir=self.output_dir)
             self.success_signal.emit(True) 
             self.finished.emit() # Emit result back to the main thread
         except Exception as e:

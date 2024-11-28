@@ -37,15 +37,17 @@ class ClipMergeExportTabDialog(QDialog):
     def __init__(self, iface):
         super().__init__()
         self.iface = iface
-        self.setWindowTitle("Clip and Merge Export")
-        self.setMinimumSize(600, 400)
+        self.setWindowTitle("AMRUT 2.0 Export Data")
+        self.setMinimumSize(700, 500)
 
         # Main layout
         layout = QVBoxLayout(self)
 
         # Tab widget
+        self.logo_layout = ui.createLogoLayout()
         self.tabs = QTabWidget()
         self.tabs.setTabBarAutoHide(True)  # Hides the tab bar
+        layout.addLayout(self.logo_layout)
         layout.addWidget(self.tabs)
 
         # Tabs
@@ -204,7 +206,7 @@ class ClipMergeExportTabDialog(QDialog):
             if hasattr(self, "output_dir"):
                     global gridLayer
                     self.progress_lable.setText("Clipping...Please Wait")
-                    self.progress_bar.setMaximum(gridLayer.featureCount())
+                    self.progress_bar.setMaximum(gridLayer.featureCount() -2)
                     self.thread = QThread()
                     self.clipWorker = workers.ClippingWorker(gridLayer, selectedLayers, self.output_dir)
                     self.clipWorker.moveToThread(self.thread)
