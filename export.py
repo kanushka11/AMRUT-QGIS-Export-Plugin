@@ -138,7 +138,7 @@ class ClipMergeExport:
         error_dialog.exec_()  # Show the dialog modally
 
         # Log the error in the QGIS message log
-        QgsMessageLog.logMessage(str(error), 'ClipMergeExport', Qgis.Critical)
+        QgsMessageLog.logMessage(str(error), 'AMRUT_Export', Qgis.Critical)
 
 
 
