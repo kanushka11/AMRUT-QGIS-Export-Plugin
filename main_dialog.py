@@ -137,7 +137,7 @@ class ClipMergeExportTabDialog(QDialog):
             global selectedLayerForGrid
             selected_layer_name = self.layer_dropdown.itemText(index)
             selectedLayerForGrid = self.layer_map.get(selected_layer_name)
-            QgsMessageLog.logMessage('Layer Selected :'+selectedLayerForGrid.name(), 'MyPlugin', Qgis.Info)
+            QgsMessageLog.logMessage('Layer Selected :'+selectedLayerForGrid.name(), 'AMRUT_Export', Qgis.Info)
 
         self.layer_dropdown.currentIndexChanged.connect(on_layer_selected)
         self.layer_dropdown.setVisible(False) 
@@ -270,7 +270,7 @@ class ClipMergeExportTabDialog(QDialog):
                     self.next_button.setEnabled(False)
                     self.progress_bar.setRange(0, 0)  # Indeterminate state
                     self.progress_lable.setText("Validating Layers")
-                    QgsMessageLog.logMessage("Validation started...", "MyPlugin", Qgis.Info)
+                    QgsMessageLog.logMessage("Validation started...", "AMRUT_Export", Qgis.Info)
                     # Create worker for validation
                     self.gridLayerCreationWorker = workers.LayerValidationWorker(selectedLayers)
                     self.thread = QThread()
@@ -332,6 +332,7 @@ class ClipMergeExportTabDialog(QDialog):
         self.progress_bar.setRange(0, 100)  # Reset progress bar range
         self.progress_lable.setText("")
         QMessageBox.critical(self,"Error", str(error))
+        QgsMessageLog.logMessage(str(error), 'AMRUT_Export', Qgis.Critical)
     
     
     def handle_layer_validation_result(self, valid, error_message):
@@ -381,7 +382,7 @@ class ClipMergeExportTabDialog(QDialog):
             global gridLayer
             gridLayer = self.get_layer_by_name(str(layer_id))
             QMessageBox.information(self, "Layer Creation", "Grid layer Created Successfully")
-            QgsMessageLog.logMessage('Layer Created : '+ layer_id, 'MyPlugin', Qgis.Info)
+            QgsMessageLog.logMessage('Layer Created : '+ layer_id, 'AMRUT_Export', Qgis.Info)
             self.tabs.setCurrentIndex(self.tabs.currentIndex() + 1)
             self.next_button.setEnabled(True)
         except Exception as e : 
