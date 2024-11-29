@@ -160,7 +160,7 @@ class ClipMergeExportTabDialog(QDialog):
         self.number_input.setRange(100, 10000)  # Set range as needed
         self.number_input.setVisible(False)  # Initially hidden
 
-        number_label = QLabel("Input Grid Size")  # To be shown with number input
+        number_label = QLabel("Input Grid Size (in Meters) :")  # To be shown with number input
         number_label.setVisible(False)
 
         layout.addWidget(self.dropdown_lable, alignment=Qt.AlignTop)
