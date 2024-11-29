@@ -2,7 +2,7 @@ from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QVariant,
 from qgis.PyQt.QtGui import QIcon, QFont
 from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QProgressDialog, QDialog,QVBoxLayout,QPushButton,QLabel
 from . import main_dialog
-from qgis.core import QgsApplication,  QgsMessageLog
+from qgis.core import QgsApplication,  QgsMessageLog, Qgis
 
 
 import processing
@@ -106,7 +106,7 @@ class ClipMergeExport:
                 mainDialog = main_dialog.ClipMergeExportTabDialog(self.iface)
                 mainDialog.exec_()
             else :
-                error_msg = f"""Please make sure the following Algorithms are available from processing toolbox : {self.required_algorithms}"""
+                error_msg = f"""Please make sure the following Algorithms are available from processing : {self.required_algorithms}"""
                 self.show_error(error_msg)
         except Exception as e :
             raise  Exception(str(e))
