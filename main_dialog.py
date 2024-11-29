@@ -15,7 +15,8 @@ from qgis.PyQt.QtWidgets import (
     QListWidgetItem,
     QHBoxLayout,
     QRadioButton,
-    QSpinBox
+    QSpinBox,
+    QTabBar
 
 )
 from qgis.core import (
@@ -54,6 +55,7 @@ class ClipMergeExportTabDialog(QDialog):
         self.logo_layout = ui.createLogoLayout()
         self.tabs = QTabWidget()
         self.tabs.setTabBarAutoHide(True)  # Hides the tab bar
+        self.tabs.setTabBar(self.CustomTabBar())
         layout.addLayout(self.logo_layout)
         layout.addWidget(self.tabs)
 
@@ -139,12 +141,17 @@ class ClipMergeExportTabDialog(QDialog):
         for layer in QgsProject.instance().mapLayers().values():
             self.layer_dropdown.addItem(layer.name())
             self.layer_map[layer.name()] = layer
+            global selectedLayerForGrid
+            if selectedLayerForGrid is None :
+                selectedLayerForGrid = layer
 
         def on_layer_selected(index):
             global selectedLayerForGrid
             selected_layer_name = self.layer_dropdown.itemText(index)
             selectedLayerForGrid = self.layer_map.get(selected_layer_name)
             QgsMessageLog.logMessage('Layer Selected :'+selectedLayerForGrid.name(), 'AMRUT_Export', Qgis.Info)
+
+
 
         self.layer_dropdown.currentIndexChanged.connect(on_layer_selected)
         self.layer_dropdown.setVisible(False) 
@@ -409,7 +416,10 @@ class ClipMergeExportTabDialog(QDialog):
     def update_clipping_progress (self, progress) :
         self.progress_bar.setValue(progress)
 
-
+    class CustomTabBar(QTabBar):
+        def mousePressEvent(self, event):
+            # Override the mousePressEvent to ignore clicks
+            pass
 
     
 

@@ -65,7 +65,7 @@ class GridLayerCeationWorker(QObject):
         try:
             # Example: Validate layers (replace with your own validation code)
             QgsMessageLog.logMessage('Creating Grid Layer', 'AMRUT_Export', Qgis.Info)  # Check if the task is started
-            layer_id = grid.create_grid_within_single_polygon(self.selectedLayers,self.layer,self.size)
+            layer_id = grid.create_grid_within_single_polygon(self.selectedLayers,self.layer,self.size, self.layer.crs().authid())
             self.layer_signal.emit(layer_id) 
             self.finished.emit() # Emit result back to the main thread
         except Exception as e:

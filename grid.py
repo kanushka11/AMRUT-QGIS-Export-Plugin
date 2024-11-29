@@ -28,7 +28,7 @@ from .import geometry
 import os
 import uuid
 
-def create_grid_layer(bbox, grid_size, crs='EPSG:32644'):
+def create_grid_layer(bbox, grid_size, crs):
     """Create a 500m x 500m grid covering the bounding box."""
     xmin, ymin, xmax, ymax = bbox
     grid_layer = QgsVectorLayer("Polygon?crs={}".format(crs), "Grid", "memory")
@@ -84,7 +84,7 @@ def add_grid_labels(grid_layer):
     # Step 4: Refresh the layer to apply the changes
     grid_layer.triggerRepaint()
 
-def create_grid_within_single_polygon(selectedLayers,polygon_layer, grid_size, crs='EPSG:32644'):
+def create_grid_within_single_polygon(selectedLayers,polygon_layer, grid_size, crs):
     """
     Create a grid covering only a single polygon geometry.
 
