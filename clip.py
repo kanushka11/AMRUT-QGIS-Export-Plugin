@@ -19,6 +19,7 @@ from qgis.core import (
 )
 import processing
 import os
+import time
 
 
 
@@ -128,12 +129,23 @@ def merge_clipped_layers (layers_path, merged_layer_path, geometry_type,crs) :
     except Exception as e:
             QMessageBox.warning(None, "Error", f"Error merging {geometry_type} layers: {e}")
 
+def closeFiles (filePaths) :
+    for file_path in filePaths :
+        file = open(file_path, "r+")
+        file.close()
+
 def removeFiles(filePaths) :
     for file_path in filePaths:
-        try:
-            os.remove(file_path)
-        except Exception as e:
-            raise Exception(f"Error deleting {file_path}: {e}")
+        retries = 5  # Number of retries to delete the file
+        while retries > 0:
+            try:
+                os.remove(file_path)
+                break
+            except PermissionError:
+                retries -= 1
+                time.sleep(0.5)  # Wait for 500ms before retrying
+            except Exception as e:
+                raise Exception(f"Error deleting {file_path}: {e}")
 
 
 def check_geometries_and_extents(layers):

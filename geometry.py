@@ -146,10 +146,8 @@ def validate_layer(layer):
             errors.append(f"Feature ID {feature.id()} has an invalid geometry.")
 
         # Check for 'id' attribute
-        if 'id' not in feature.fields().names():
-            errors.append(f"Feature ID {feature.id()} does not have an 'id' attribute.")
-        elif not feature['id']:
-            errors.append(f"Feature ID {feature.id()} has an empty or null 'id' value.")
+        if feature.id() == -1:  # Check if the feature ID is invalid
+            print("Feature ID is null or invalid.")
 
     # Check attribute fields
     if not layer.fields():

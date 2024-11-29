@@ -18,7 +18,14 @@ from qgis.PyQt.QtWidgets import (
     QSpinBox
 
 )
-from qgis.core import QgsProject, QgsProcessingFeedback, QgsMessageLog, Qgis, QgsVectorLayer
+from qgis.core import (
+    QgsProject,
+    QgsProcessingFeedback,
+    QgsMessageLog,
+    Qgis,
+    QgsVectorLayer,
+    QgsApplication
+)
 from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject, QThread
 from . import clip, grid, geometry, ui
 from . import workers
@@ -401,6 +408,8 @@ class ClipMergeExportTabDialog(QDialog):
     
     def update_clipping_progress (self, progress) :
         self.progress_bar.setValue(progress)
+
+
 
     
 
