@@ -112,8 +112,12 @@ def create_grid_within_single_polygon(selectedLayers,polygon_layer, grid_size, c
             raise ValueError("Polygon geometry is empty or invalid")
 
         # Generate the grid cells and clip them to the polygon geometry
-        combined_extent = geometry.getExtent(selectedLayers)
-        grid_layer = create_grid_layer(combined_extent.toRectF().getCoords(),grid_size, crs)
+        combined_extent_of_selected_layers = geometry.getExtent(selectedLayers)
+        extent_of_polygon_layer = geometry.getExtent([polygon_layer])
+        if not extent_of_polygon_layer.contains(combined_extent_of_selected_layers) :
+            raise Exception("Extent Mismatch : Selected Layers extent is greater than that of Boundary Layer")
+
+        grid_layer = create_grid_layer(extent_of_polygon_layer.toRectF().getCoords(),grid_size, crs)
 
         polygon_crs = polygon_layer.crs()
         grid_crs = grid_layer.crs()
@@ -144,8 +148,8 @@ def create_grid_within_single_polygon(selectedLayers,polygon_layer, grid_size, c
         if not error :
             file_path = getFilePath(unique_id)
             save_file_to_disk(layer = clipped_grid_layer, file_path=file_path)
-            grid_layer = clipped_grid_layer = QgsVectorLayer(file_path + ".gpkg", unique_id, "ogr")
-            QgsProject.instance().addMapLayer(grid_layer)
+            saved_grid_layer =  QgsVectorLayer(file_path + ".gpkg", unique_id, "ogr")
+            QgsProject.instance().addMapLayer(saved_grid_layer)
             return unique_id
         else :
             msg = "Error :\n" + "\n".join( [f"{error_msg}" for error_msg in error])

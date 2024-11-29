@@ -11,6 +11,7 @@ from qgis.core import (
     QgsRectangle,
     QgsField,
     QgsFeature,
+    QgsMapLayer,
     QgsGeometry,
     QgsProcessingFeedback,
     QgsSpatialIndex, 
@@ -162,16 +163,22 @@ def validate_layer(layer):
 
     return errors
 
-def getExtent(layers) :
-    all_extents = []
-    valid = True
 
+def getExtent(layers):
+    all_extents = []
+
+    # Collect extents of vector layers
     for i, layer in enumerate(layers):
-        if layer.type() == QgsVectorLayer.VectorLayer:
+        if layer.type() == QgsMapLayer.VectorLayer:  # Correct layer type check
             all_extents.append(layer.extent())
 
-    combined_extent = QgsRectangle()
-    for extent in all_extents:
-        combined_extent.combineExtentWith(extent)
-    
-    return combined_extent
+    # Combine extents
+    if all_extents:  # Ensure there are extents to combine
+        combined_extent = all_extents[0]
+        for extent in all_extents[1:]:
+            combined_extent.combineExtentWith(extent)
+        return combined_extent
+    else:
+        return QgsRectangle()  # Return an empty extent if no layers are valid
+
+
