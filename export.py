@@ -1,7 +1,8 @@
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QVariant,Qt
 from qgis.PyQt.QtGui import QIcon, QFont
-from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QProgressDialog, QDialog
+from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QProgressDialog, QDialog,QVBoxLayout,QPushButton,QLabel
 from . import main_dialog
+from qgis.core import QgsApplication,  QgsMessageLog, Qgis
 
 
 import processing
@@ -94,8 +95,50 @@ class ClipMergeExport:
             self.iface.removeToolBarIcon(action)
 
     def run(self):
-         mainDialog = main_dialog.ClipMergeExportTabDialog(self.iface)
-         mainDialog.exec_()
+        try :
+            self.required_algorithms = ["qgis:clip", 'gdal:cliprasterbymasklayer']
+            self.prerequisits_avalaible = True
+            for algorithm in self.required_algorithms :
+                if not self.is_algorithm_available(algorithm) :
+                    self.prerequisits_avalaible = False
+
+            if(self.prerequisits_avalaible) :
+                mainDialog = main_dialog.ClipMergeExportTabDialog(self.iface)
+                mainDialog.exec_()
+            else :
+                error_msg = f"""Please make sure the following Algorithms are available from processing : {self.required_algorithms}"""
+                self.show_error(error_msg)
+        except Exception as e :
+            raise  Exception(str(e))
+
+    def is_algorithm_available(self, algorithm_id):
+        """Check if a processing algorithm is available."""
+        return QgsApplication.processingRegistry().algorithmById(algorithm_id) is not None
+
+    def show_error (self, error):
+        error_dialog = QDialog(self.iface.mainWindow())
+        error_dialog.setWindowTitle("Error")
+        error_dialog.setModal(True)
+        error_dialog.setMinimumWidth(400)
+
+        # Layout for the dialog
+        layout = QVBoxLayout()
+
+        # Label for displaying the error message
+        error_label = QLabel(str(error))
+        error_label.setWordWrap(True)  # Wrap long error messages
+        layout.addWidget(error_label)
+
+        # OK button to close the dialog
+        ok_button = QPushButton("OK")
+        ok_button.clicked.connect(error_dialog.accept)  # Closes the dialog
+        layout.addWidget(ok_button)
+
+        error_dialog.setLayout(layout)
+        error_dialog.exec_()  # Show the dialog modally
+
+        # Log the error in the QGIS message log
+        QgsMessageLog.logMessage(str(error), 'AMRUT_Export', Qgis.Critical)
 
 
 

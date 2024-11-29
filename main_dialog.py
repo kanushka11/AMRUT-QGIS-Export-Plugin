@@ -15,10 +15,18 @@ from qgis.PyQt.QtWidgets import (
     QListWidgetItem,
     QHBoxLayout,
     QRadioButton,
-    QSpinBox
+    QSpinBox,
+    QTabBar
 
 )
-from qgis.core import QgsProject, QgsProcessingFeedback, QgsMessageLog, Qgis, QgsVectorLayer
+from qgis.core import (
+    QgsProject,
+    QgsProcessingFeedback,
+    QgsMessageLog,
+    Qgis,
+    QgsVectorLayer,
+    QgsApplication
+)
 from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject, QThread
 from . import clip, grid, geometry, ui
 from . import workers
@@ -47,6 +55,7 @@ class ClipMergeExportTabDialog(QDialog):
         self.logo_layout = ui.createLogoLayout()
         self.tabs = QTabWidget()
         self.tabs.setTabBarAutoHide(True)  # Hides the tab bar
+        self.tabs.setTabBar(self.CustomTabBar())
         layout.addLayout(self.logo_layout)
         layout.addWidget(self.tabs)
 
@@ -132,12 +141,17 @@ class ClipMergeExportTabDialog(QDialog):
         for layer in QgsProject.instance().mapLayers().values():
             self.layer_dropdown.addItem(layer.name())
             self.layer_map[layer.name()] = layer
+            global selectedLayerForGrid
+            if selectedLayerForGrid is None :
+                selectedLayerForGrid = layer
 
         def on_layer_selected(index):
             global selectedLayerForGrid
             selected_layer_name = self.layer_dropdown.itemText(index)
             selectedLayerForGrid = self.layer_map.get(selected_layer_name)
-            QgsMessageLog.logMessage('Layer Selected :'+selectedLayerForGrid.name(), 'MyPlugin', Qgis.Info)
+            QgsMessageLog.logMessage('Layer Selected :'+selectedLayerForGrid.name(), 'AMRUT_Export', Qgis.Info)
+
+
 
         self.layer_dropdown.currentIndexChanged.connect(on_layer_selected)
         self.layer_dropdown.setVisible(False) 
@@ -146,7 +160,7 @@ class ClipMergeExportTabDialog(QDialog):
         self.number_input.setRange(100, 10000)  # Set range as needed
         self.number_input.setVisible(False)  # Initially hidden
 
-        number_label = QLabel("Input Grid Size")  # To be shown with number input
+        number_label = QLabel("Input Grid Size (in Meters) :")  # To be shown with number input
         number_label.setVisible(False)
 
         layout.addWidget(self.dropdown_lable, alignment=Qt.AlignTop)
@@ -270,7 +284,7 @@ class ClipMergeExportTabDialog(QDialog):
                     self.next_button.setEnabled(False)
                     self.progress_bar.setRange(0, 0)  # Indeterminate state
                     self.progress_lable.setText("Validating Layers")
-                    QgsMessageLog.logMessage("Validation started...", "MyPlugin", Qgis.Info)
+                    QgsMessageLog.logMessage("Validation started...", "AMRUT_Export", Qgis.Info)
                     # Create worker for validation
                     self.gridLayerCreationWorker = workers.LayerValidationWorker(selectedLayers)
                     self.thread = QThread()
@@ -332,6 +346,7 @@ class ClipMergeExportTabDialog(QDialog):
         self.progress_bar.setRange(0, 100)  # Reset progress bar range
         self.progress_lable.setText("")
         QMessageBox.critical(self,"Error", str(error))
+        QgsMessageLog.logMessage(str(error), 'AMRUT_Export', Qgis.Critical)
     
     
     def handle_layer_validation_result(self, valid, error_message):
@@ -381,7 +396,7 @@ class ClipMergeExportTabDialog(QDialog):
             global gridLayer
             gridLayer = self.get_layer_by_name(str(layer_id))
             QMessageBox.information(self, "Layer Creation", "Grid layer Created Successfully")
-            QgsMessageLog.logMessage('Layer Created : '+ layer_id, 'MyPlugin', Qgis.Info)
+            QgsMessageLog.logMessage('Layer Created : '+ layer_id, 'AMRUT_Export', Qgis.Info)
             self.tabs.setCurrentIndex(self.tabs.currentIndex() + 1)
             self.next_button.setEnabled(True)
         except Exception as e : 
@@ -400,6 +415,11 @@ class ClipMergeExportTabDialog(QDialog):
     
     def update_clipping_progress (self, progress) :
         self.progress_bar.setValue(progress)
+
+    class CustomTabBar(QTabBar):
+        def mousePressEvent(self, event):
+            # Override the mousePressEvent to ignore clicks
+            pass
 
     
 

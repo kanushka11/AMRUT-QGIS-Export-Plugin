@@ -123,7 +123,7 @@ def validate_layer(layer):
         errors.append("The layer is not valid. Check the file path or data source.")
         return errors
     else :
-        QgsMessageLog.logMessage('Layers valid : '+ str(layer.name()), 'MyPlugin', Qgis.Info)
+        QgsMessageLog.logMessage('Layers valid : '+ str(layer.name()), 'AMRUT_Export', Qgis.Info)
 
     # Check CRS validity
     if layer.crs().isValid():
@@ -145,6 +145,10 @@ def validate_layer(layer):
         elif not geom.isGeosValid():
             errors.append(f"Feature ID {feature.id()} has an invalid geometry.")
 
+        # Check for 'id' attribute
+        if feature.id() == -1:  # Check if the feature ID is invalid
+            print("Feature ID is null or invalid.")
+
     # Check attribute fields
     if not layer.fields():
         errors.append("The layer contains no attribute fields.")
@@ -154,6 +158,7 @@ def validate_layer(layer):
                 errors.append("A field has an empty name.")
             if field.type() == QVariant.Invalid:
                 errors.append(f"Field '{field.name()}' has an invalid type.")
+
 
     return errors
 
