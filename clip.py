@@ -20,6 +20,8 @@ from qgis.core import (
 import processing
 import os
 import time
+from datetime import datetime
+import csv
 
 
 
@@ -30,7 +32,11 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
     # Create the output directory if it doesn't exist
     if not os.path.exists(output_base_dir):
         os.makedirs(output_base_dir)
+    csv_file_path = os.path.join(output_base_dir, "grid_data.csv")
 
+    with open(csv_file_path, mode='w', newline='', encoding='utf-8') as csv_file:
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerow(["grid_name", "creation_date", "assigned_to_surveyor", "submission_date"])
 
     for i, feature in enumerate(grid_layer.getFeatures()):
         current_step = i
@@ -112,6 +118,15 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
 
         for geometry_type, layer_paths in clipped_layers.items() :
             removeFiles(layer_paths)
+
+        with open(csv_file_path, mode='a', newline='', encoding='utf-8') as csv_file:
+            csv_writer = csv.writer(csv_file)
+            csv_writer.writerow([
+                f"grid_{grid_cell_id}",
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                "",  # Assigned to surveyor (empty)
+                ""  # Submission date (empty)
+            ])
 
         
 
