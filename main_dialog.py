@@ -286,14 +286,14 @@ class ClipMergeExportTabDialog(QDialog):
                     self.progress_lable.setText("Validating Layers")
                     QgsMessageLog.logMessage("Validation started...", "AMRUT_Export", Qgis.Info)
                     # Create worker for validation
-                    self.gridLayerCreationWorker = workers.LayerValidationWorker(selectedLayers)
+                    self.layerValidationWorker = workers.LayerValidationWorker(selectedLayers)
                     self.thread = QThread()
-                    self.gridLayerCreationWorker.moveToThread(self.thread)
-                    self.thread.started.connect(self.gridLayerCreationWorker.run)
-                    self.gridLayerCreationWorker.finished.connect(self.thread.quit)
-                    self.gridLayerCreationWorker.finished.connect(self.gridLayerCreationWorker.deleteLater)
+                    self.layerValidationWorker.moveToThread(self.thread)
+                    self.thread.started.connect(self.layerValidationWorker.run)
+                    self.layerValidationWorker.finished.connect(self.thread.quit)
+                    self.layerValidationWorker.finished.connect(self.layerValidationWorker.deleteLater)
                     self.thread.finished.connect(self.thread.deleteLater)
-                    self.gridLayerCreationWorker.result_signal.connect(self.handle_layer_validation_result)
+                    self.layerValidationWorker.result_signal.connect(self.handle_layer_validation_result)
                     self.thread.start()
                     
                 else:
@@ -303,17 +303,17 @@ class ClipMergeExportTabDialog(QDialog):
                 if self.yes_radio.isChecked() :
                     # get grid /segmanation layer and validate it 
                     gridLayer = selectedLayerForGrid
-                    self.gridLayerCreationWorker = workers.GridLayerValidationWorker(gridLayer)
+                    self.layerValidationWorker = workers.GridLayerValidationWorker(gridLayer)
                     self.next_button.setEnabled(False)
                     self.progress_bar.setRange(0, 0)  # Indeterminate state
                     self.progress_lable.setText("Processing...")
                     self.thread = QThread()
-                    self.gridLayerCreationWorker.moveToThread(self.thread)
-                    self.thread.started.connect(self.gridLayerCreationWorker.run)
-                    self.gridLayerCreationWorker.finished.connect(self.thread.quit)
-                    self.gridLayerCreationWorker.finished.connect(self.gridLayerCreationWorker.deleteLater)
+                    self.layerValidationWorker.moveToThread(self.thread)
+                    self.thread.started.connect(self.layerValidationWorker.run)
+                    self.layerValidationWorker.finished.connect(self.thread.quit)
+                    self.layerValidationWorker.finished.connect(self.layerValidationWorker.deleteLater)
                     self.thread.finished.connect(self.thread.deleteLater)
-                    self.gridLayerCreationWorker.result_signal.connect(self.handle_grid_layer_validation_result)
+                    self.layerValidationWorker.result_signal.connect(self.handle_grid_layer_validation_result)
                     self.thread.start()
 
                 if self.no_radio.isChecked() :
@@ -324,14 +324,14 @@ class ClipMergeExportTabDialog(QDialog):
                     print("Grid Size : "+ str(self.number_input.value()))
                     self.progress_lable.setText("Creating Layer...")
                     self.thread = QThread()
-                    self.gridLayerCreationWorker = workers.GridLayerCeationWorker(selectedLayers,gridLayer, self.number_input.value())
-                    self.gridLayerCreationWorker.moveToThread(self.thread)
-                    self.thread.started.connect(self.gridLayerCreationWorker.run)
-                    self.gridLayerCreationWorker.finished.connect(self.thread.quit)
-                    self.gridLayerCreationWorker.finished.connect(self.gridLayerCreationWorker.deleteLater)
+                    self.layerValidationWorker = workers.GridLayerCeationWorker(selectedLayers, gridLayer, self.number_input.value())
+                    self.layerValidationWorker.moveToThread(self.thread)
+                    self.thread.started.connect(self.layerValidationWorker.run)
+                    self.layerValidationWorker.finished.connect(self.thread.quit)
+                    self.layerValidationWorker.finished.connect(self.layerValidationWorker.deleteLater)
                     self.thread.finished.connect(self.thread.deleteLater)
-                    self.gridLayerCreationWorker.layer_signal.connect(self.handle_grid_creation_result)
-                    self.gridLayerCreationWorker.error_signal.connect(self.show_error)
+                    self.layerValidationWorker.layer_signal.connect(self.handle_grid_creation_result)
+                    self.layerValidationWorker.error_signal.connect(self.show_error)
                     self.thread.start()
             
             
