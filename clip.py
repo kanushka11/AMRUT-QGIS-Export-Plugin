@@ -8,6 +8,7 @@ from qgis.core import (
     QgsWkbTypes,
     QgsProject,
     QgsRectangle,
+    QgsVectorFileWriter,
     QgsField,
     QgsFeature,
     QgsGeometry,
@@ -22,6 +23,8 @@ import os
 import time
 from datetime import datetime
 import csv
+import subprocess
+import shutil
 
 
 
@@ -40,7 +43,7 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
 
     for i, feature in enumerate(grid_layer.getFeatures()):
         current_step = i
-        progress_signal.emit(current_step)
+
 
 
         grid_cell_geom = feature.geometry()
@@ -67,6 +70,7 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
         temp_feature.setAttributes(feature.attributes())
         temp_layer_data.addFeatures([temp_feature])
         temp_layer.updateExtents()
+        create_html_file(temp_layer,grid_dir, grid_layer.crs())
 
         clipped_layers = {
             "Point": [],
@@ -96,6 +100,8 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
         
             elif layer.type() == QgsRasterLayer.RasterLayer:  # Handle raster layers
                 output_path = os.path.join(grid_dir, f"{layer.name()}_clipped.tif")
+                tile_output_dir = os.path.join(grid_dir, "tiles")
+
                 clip_params = {
                     'INPUT': layer.source(),
                     'MASK': temp_layer,
@@ -104,6 +110,17 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
                 }
                 try:
                     processing.run("gdal:cliprasterbymasklayer", clip_params, feedback=feedback)
+                    if not os.path.exists(tile_output_dir):
+                        os.makedirs(tile_output_dir)
+                    gdal2tiles_command = [
+                        "gdal2tiles.py",
+                        "-z", "0-19",  # Adjust zoom levels as needed
+                        "-w", "none",
+                        output_path,
+                        tile_output_dir
+                    ]
+                    subprocess.run(gdal2tiles_command, check=True)
+                    remove_files([output_path])
                 except Exception as e:
                     QMessageBox.warning(None, "Error", f"Error clipping raster layer '{layer.name()}' with grid cell {grid_cell_id}: {e}")
         
@@ -117,7 +134,7 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
                 merge_clipped_layers(layer_paths, geometry_output_files[geometry_type], geometry_type, "EPSG:4326")
 
         for geometry_type, layer_paths in clipped_layers.items() :
-            removeFiles(layer_paths)
+            remove_files(layer_paths)
 
         with open(csv_file_path, mode='a', newline='', encoding='utf-8') as csv_file:
             csv_writer = csv.writer(csv_file)
@@ -128,7 +145,75 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
                 ""  # Submission date (empty)
             ])
 
-        
+        # Define a unique archive name separate from the directory
+        archive_name = os.path.join(grid_dir, f"grid_{grid_cell_id}")
+        create_archive(grid_dir,archive_name)
+        progress_signal.emit(current_step)
+
+def create_kml_file(layer, grid_dir, crs) :
+    kml_file_path = os.path.join(grid_dir, f"location.kml")
+    options = QgsVectorFileWriter.SaveVectorOptions()
+    QgsVectorFileWriter.writeAsVectorFormat(
+        layer,
+        kml_file_path,
+        "utf-8",
+        crs,
+        "KML"
+    )
+
+
+def create_html_file(layer, grid_dir, crs):
+    """
+    Creates an HTML file with a script that redirects to Google Maps for the polygon feature.
+    """
+    html_file_path = os.path.join(grid_dir, f"location.html")
+
+    # Get the geometry of the first feature (assuming only one feature per layer)
+    layer.startEditing()
+    feature = next(layer.getFeatures(), None)
+    layer.commitChanges()
+
+    if not feature:
+        raise ValueError("No feature found in the layer.")
+
+    geometry = feature.geometry()
+
+    if geometry.isEmpty():
+        raise ValueError("Geometry is empty.")
+
+    # Extract the centroid of the polygon as latitude and longitude
+    centroid = geometry.centroid().asPoint()
+    latitude, longitude = centroid.y(), centroid.x()
+
+    # Write the HTML file
+    html_content = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Polygon Location</title>
+            <script>
+                // Google Maps URL with latitude and longitude
+                const googleMapsUrl = "https://www.google.com/maps?q={latitude},{longitude}";
+    
+                // Redirect to the Google Maps URL when the page loads
+                window.onload = () => {{
+                    window.location.href = googleMapsUrl;
+                }};
+            </script>
+        </head>
+        <body>
+            <p>If you are not redirected automatically, click <a href="https://www.google.com/maps?q={latitude},{longitude}">here</a>.</p>
+        </body>
+        </html>
+        """
+
+    # Save the HTML file
+    with open(html_file_path, 'w', encoding='utf-8') as html_file:
+        html_file.write(html_content)
+
+    print(f"HTML file created at: {html_file_path}")
 
         
 
@@ -144,13 +229,13 @@ def merge_clipped_layers (layers_path, merged_layer_path, geometry_type,crs) :
     except Exception as e:
             QMessageBox.warning(None, "Error", f"Error merging {geometry_type} layers: {e}")
 
-def closeFiles (filePaths) :
-    for file_path in filePaths :
+def close_files (file_paths) :
+    for file_path in file_paths :
         file = open(file_path, "r+")
         file.close()
 
-def removeFiles(filePaths) :
-    for file_path in filePaths:
+def remove_files(file_paths) :
+    for file_path in file_paths:
         retries = 5  # Number of retries to delete the file
         while retries > 0:
             try:
@@ -191,38 +276,44 @@ def check_geometries_and_extents(layers):
 
     return combined_extent
 
-def drop_empty_grids(grid_layer, layers, feedback=None):
-    """Remove grids that do not intersect any features."""
-    provider = grid_layer.dataProvider()
-    features_to_remove = []
-    total_grids = grid_layer.featureCount()
-    grid_index = QgsSpatialIndex(grid_layer)  # Use spatial index for faster checks
+def create_archive (grid_dir, archive_name) :
+    try :
+        files_to_compress = []
+        tiles_dir = None
+        for root, dirs, files in os.walk(grid_dir):
+            for file in files:
+                if file != "location.html":
+                    files_to_compress.append(os.path.join(root, file))
+            if "tiles" in dirs:
+                tiles_dir = os.path.join(root, "tiles")
+            # Create a temporary directory for archiving
+        temp_archive_dir = os.path.join(grid_dir, f"temp_archive")
+        if not os.path.exists(temp_archive_dir):
+            os.makedirs(temp_archive_dir)
 
-    for i, grid_feature in enumerate(grid_layer.getFeatures()):
-        if feedback:
-            feedback.setProgress(int((i / total_grids) * 100))
-        if feedback and feedback.isCanceled():
-            break
+        for file_path in files_to_compress:
+            relative_path = os.path.relpath(file_path, grid_dir)
+            dest_path = os.path.join(temp_archive_dir, relative_path)
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+            shutil.copy(file_path, dest_path)
 
-        grid_geom = grid_feature.geometry()
-        intersects = False
+        # Compress files to .zip
+        shutil.make_archive(archive_name, 'zip', temp_archive_dir)
 
-        # Check intersection using spatial indexing
-        for layer in layers:
-            if layer.type() == QgsVectorLayer.VectorLayer:
-                spatial_index = QgsSpatialIndex(layer)
-                intersecting_ids = spatial_index.intersects(grid_geom.boundingBox())
-                if intersecting_ids:
-                    intersects = True
-                    break
+        # Rename .zip to .amrut
+        amrut_file = f"{archive_name}.amrut"
+        os.rename(f"{archive_name}.zip", amrut_file)
 
-        if not intersects:
-            features_to_remove.append(grid_feature.id())
+        # Cleanup temporary archive directory
+        shutil.rmtree(temp_archive_dir)
 
-    # Remove empty grids
-    if features_to_remove:
-        provider.deleteFeatures(features_to_remove)
+        # Remove original files (except location.html)
+        remove_files(files_to_compress)
 
-    grid_layer.updateExtents()
+        # Remove tiles directory
+        if tiles_dir and os.path.exists(tiles_dir):
+            shutil.rmtree(tiles_dir)
 
+    except Exception as e:
+        QMessageBox.warning(None, "Error", f"Error creating .amrut archive for grid : {e}")
 

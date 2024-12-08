@@ -32,5 +32,5 @@ def classFactory(iface):  # pylint: disable=invalid-name
     :type iface: QgsInterface
     """
     #
-    from .export import ClipMergeExport
-    return ClipMergeExport(iface)
+    from .export import AMRUT
+    return AMRUT(iface)

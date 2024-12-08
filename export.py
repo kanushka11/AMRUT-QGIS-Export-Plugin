@@ -18,7 +18,7 @@ from .resources import *
 # Import the code for the dialog
 from .export_dialog import ClipMergeExportDialog
 import os.path
-class ClipMergeExport:
+class AMRUT:
     """QGIS Plugin Implementation."""
 
     def __init__(self, iface):
@@ -38,7 +38,7 @@ class ClipMergeExport:
         locale_path = os.path.join(
             self.plugin_dir,
             'i18n',
-            'ClipMergeExport_{}.qm'.format(locale))
+            'AMRUT_{}.qm'.format(locale))
 
         if os.path.exists(locale_path):
             self.translator = QTranslator()
@@ -47,7 +47,7 @@ class ClipMergeExport:
 
         # Declare instance attributes
         self.actions = []
-        self.menu = self.tr(u'&ClipMergeExport')
+        self.menu = self.tr(u'&AMRUT')
 
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
@@ -55,7 +55,7 @@ class ClipMergeExport:
 
     def tr(self, message):
         """Get the translation for a string using Qt translation API."""
-        return QCoreApplication.translate('ClipMergeExport', message)
+        return QCoreApplication.translate('AMRUT', message)
 
     def add_action(self, icon_path, text, callback, enabled_flag=True, add_to_menu=True, add_to_toolbar=True, status_tip=None, whats_this=None, parent=None):
         """Add a toolbar icon to the toolbar."""
@@ -83,7 +83,7 @@ class ClipMergeExport:
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
         icon_path = ':/plugins/export/icon.png'
-        self.add_action(icon_path, text=self.tr(u'Clip and Export'), callback=self.run, parent=self.iface.mainWindow())
+        self.add_action(icon_path, text=self.tr(u'AMRUT'), callback=self.run, parent=self.iface.mainWindow())
 
         # will be set False in run()
         self.first_start = True
@@ -91,12 +91,12 @@ class ClipMergeExport:
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
-            self.iface.removePluginMenu(self.tr(u'&ClipMergeExport'), action)
+            self.iface.removePluginMenu(self.tr(u'&AMRUT'), action)
             self.iface.removeToolBarIcon(action)
 
     def run(self):
         try :
-            self.required_algorithms = ["qgis:clip", 'gdal:cliprasterbymasklayer']
+            self.required_algorithms = ["qgis:clip", 'gdal:cliprasterbymasklayer', 'gdal:gdal2tiles']
             self.prerequisits_avalaible = True
             for algorithm in self.required_algorithms :
                 if not self.is_algorithm_available(algorithm) :
@@ -138,7 +138,7 @@ class ClipMergeExport:
         error_dialog.exec_()  # Show the dialog modally
 
         # Log the error in the QGIS message log
-        QgsMessageLog.logMessage(str(error), 'AMRUT_Export', Qgis.Critical)
+        QgsMessageLog.logMessage(str(error), 'AMRUT', Qgis.Critical)
 
 
 
