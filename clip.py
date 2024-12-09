@@ -101,6 +101,7 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
             elif layer.type() == QgsRasterLayer.RasterLayer:  # Handle raster layers
                 output_path = os.path.join(grid_dir, f"{layer.name()}_clipped.tif")
                 tile_output_dir = os.path.join(grid_dir, "tiles")
+                reprojected_raster = os.path.join(grid_dir, f"{layer.name()}_reproject.tif")
 
                 clip_params = {
                     'INPUT': layer.source(),
@@ -112,12 +113,20 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
                     processing.run("gdal:cliprasterbymasklayer", clip_params, feedback=feedback)
                     if not os.path.exists(tile_output_dir):
                         os.makedirs(tile_output_dir)
+                    params = {
+                        'INPUT': output_path,
+                        'TARGET_CRS': 'EPSG:3857',
+                        'OUTPUT': reprojected_raster
+                    }
+                    processing.run("gdal:warpreproject", params, feedback = feedback)
                     gdal2tiles_command = [
                         "gdal2tiles.py",
                         "-z", "0-19",  # Adjust zoom levels as needed
-                        "-w", "none",
-                        output_path,
-                        tile_output_dir
+                        "-w", "openlayers",  # Generates OpenLayers web viewer files
+                        "--profile", "mercator",  # Use Web Mercator profile
+                        "--tmscompatible",  # Ensure TMS-compatible tile structure (flipped Y-coordinate)
+                        reprojected_raster,  # Input raster file path
+                        tile_output_dir  # Output tile directory
                     ]
                     subprocess.run(gdal2tiles_command, check=True)
                     remove_files([output_path])

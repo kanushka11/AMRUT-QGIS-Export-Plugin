@@ -96,7 +96,7 @@ class AMRUT:
 
     def run(self):
         try :
-            self.required_algorithms = ["qgis:clip", 'gdal:cliprasterbymasklayer', 'gdal:gdal2tiles']
+            self.required_algorithms = ["qgis:clip", 'gdal:cliprasterbymasklayer', 'gdal:gdal2tiles', 'gdal:warpreproject']
             self.prerequisits_avalaible = True
             for algorithm in self.required_algorithms :
                 if not self.is_algorithm_available(algorithm) :
