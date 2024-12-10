@@ -16,7 +16,11 @@ from qgis.core import (
     QgsSpatialIndex, 
     QgsPalLayerSettings, 
     QgsTextFormat, 
-    QgsVectorLayerSimpleLabeling
+    QgsVectorLayerSimpleLabeling,
+    QgsCoordinateReferenceSystem,
+    QgsCoordinateTransform,
+    QgsProject
+
 )
 import processing
 import os
@@ -25,6 +29,8 @@ from datetime import datetime
 import csv
 import subprocess
 import shutil
+import json
+from . import rename_tiles as tiles
 
 
 
@@ -121,7 +127,7 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
                     processing.run("gdal:warpreproject", params, feedback = feedback)
                     gdal2tiles_command = [
                         "gdal2tiles.py",
-                        "-z", "0-19",  # Adjust zoom levels as needed
+                        "-z", "0-21",  # Adjust zoom levels as needed
                         "-w", "openlayers",  # Generates OpenLayers web viewer files
                         "--profile", "mercator",  # Use Web Mercator profile
                         "--tmscompatible",  # Ensure TMS-compatible tile structure (flipped Y-coordinate)
@@ -129,7 +135,8 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
                         tile_output_dir  # Output tile directory
                     ]
                     subprocess.run(gdal2tiles_command, check=True)
-                    remove_files([output_path])
+                    tiles.rename_tiles(tile_output_dir)
+                    remove_files([output_path, reprojected_raster])
                 except Exception as e:
                     QMessageBox.warning(None, "Error", f"Error clipping raster layer '{layer.name()}' with grid cell {grid_cell_id}: {e}")
         
@@ -176,7 +183,9 @@ def create_html_file(layer, grid_dir, crs):
     Creates an HTML file with a script that redirects to Google Maps for the polygon feature.
     """
     html_file_path = os.path.join(grid_dir, f"location.html")
-
+    json_file_path = os.path.join(grid_dir, "metadata.json")
+    target_crs = QgsCoordinateReferenceSystem("EPSG:4326")
+    transform = QgsCoordinateTransform(crs, target_crs, QgsProject.instance())
     # Get the geometry of the first feature (assuming only one feature per layer)
     layer.startEditing()
     feature = next(layer.getFeatures(), None)
@@ -189,6 +198,9 @@ def create_html_file(layer, grid_dir, crs):
 
     if geometry.isEmpty():
         raise ValueError("Geometry is empty.")
+
+    # Extract the centroid of the polygon as latitude and longitude
+    geometry.transform(transform)
 
     # Extract the centroid of the polygon as latitude and longitude
     centroid = geometry.centroid().asPoint()
@@ -217,12 +229,23 @@ def create_html_file(layer, grid_dir, crs):
         </body>
         </html>
         """
+    #metadata Json
+    bounding_box = geometry.boundingBox()
+    bounding_box_dict = {
+        "north": bounding_box.yMaximum(),
+        "south": bounding_box.yMinimum(),
+        "east": bounding_box.xMaximum(),
+        "west": bounding_box.xMinimum()
+    }
+
+    # Write the bounding box to a JSON file
+    with open(json_file_path, 'w', encoding='utf-8') as json_file:
+        json.dump(bounding_box_dict, json_file, indent=4)
 
     # Save the HTML file
     with open(html_file_path, 'w', encoding='utf-8') as html_file:
         html_file.write(html_content)
 
-    print(f"HTML file created at: {html_file_path}")
 
         
 
