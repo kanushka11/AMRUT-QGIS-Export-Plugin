@@ -127,7 +127,7 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
                     processing.run("gdal:warpreproject", params, feedback = feedback)
                     gdal2tiles_command = [
                         "gdal2tiles.py",
-                        "-z", "0-21",  # Adjust zoom levels as needed
+                        "-z", "16-22",  # Adjust zoom levels as needed
                         "-w", "openlayers",  # Generates OpenLayers web viewer files
                         "--profile", "mercator",  # Use Web Mercator profile
                         "--tmscompatible",  # Ensure TMS-compatible tile structure (flipped Y-coordinate)
