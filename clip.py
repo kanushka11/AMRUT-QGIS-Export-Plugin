@@ -122,19 +122,24 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
                     params = {
                         'INPUT': output_path,
                         'TARGET_CRS': 'EPSG:3857',
+                        'RESOLUTION': 0.0001,
                         'OUTPUT': reprojected_raster
                     }
                     processing.run("gdal:warpreproject", params, feedback = feedback)
-                    gdal2tiles_command = [
-                        "gdal2tiles.py",
-                        "-z", "16-21",  # Adjust zoom levels as needed
-                        "-w", "openlayers",  # Generates OpenLayers web viewer files
-                        "--profile", "mercator",  # Use Web Mercator profile
-                        "--tmscompatible",  # Ensure TMS-compatible tile structure (flipped Y-coordinate)
-                        reprojected_raster,  # Input raster file path
-                        tile_output_dir  # Output tile directory
-                    ]
-                    subprocess.run(gdal2tiles_command, check=True)
+                    params = {
+                        'INPUT': reprojected_raster,  # Input raster file path
+                        'OUTPUT': tile_output_dir,  # Output tile directory
+                        'MIN_ZOOM_LEVEL': 16,
+                        'MAX_ZOOM_LEVEL': 21, # Adjust zoom levels as needed
+                        'TILE_FORMAT': 'png',  # Adjust format if needed
+                        'RESAMPLING': 0,  # Default is nearest neighbor (adjust if needed)
+                        'TMS_CONVENTION': True,  # Use TMS-compatible tiles (flipped Y-coordinate)
+                        'PROFILE': 0,  # Mercator profile
+                        'WEB_VIEWER': 'none',  # Generates OpenLayers web viewer files
+                    }
+
+                    processing.run("gdal:gdal2tiles", params, feedback=feedback)
+
                     tiles.rename_tiles(tile_output_dir)
                     remove_files([output_path, reprojected_raster])
                 except Exception as e:
