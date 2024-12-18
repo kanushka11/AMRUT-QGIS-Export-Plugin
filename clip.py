@@ -256,8 +256,24 @@ def create_html_file(layer, grid_dir, crs):
 
 def merge_clipped_layers (layers_path, merged_layer_path, geometry_type,crs) : 
     feedback = QgsProcessingFeedback()
+    valid_layers = []
+    for path in layers_path:
+        layer = QgsVectorLayer(path, "temp_layer", "ogr")
+        if not layer.isValid():
+            QMessageBox.warning(None, "Warning", f"Invalid layer: {path}")
+            continue
+        if layer.featureCount() > 0:
+            valid_layers.append(path)
+        else:
+            print(f"Skipped empty GeoJSON: {path}")
+
+    # If no valid layers exist, exit
+    if not valid_layers:
+        QMessageBox.warning(None, "Error", f"No valid {geometry_type} layers to merge.")
+        return
+
     merge_params = {
-            'LAYERS': layers_path,
+            'LAYERS': valid_layers,
             'CRS': crs,
             'OUTPUT': merged_layer_path
     }
