@@ -77,7 +77,7 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
         temp_layer_data.addFeatures([temp_feature])
         temp_layer.updateExtents()
         create_html_file(temp_layer,grid_dir, grid_layer.crs())
-
+        create_kml_file(temp_layer,grid_layer, grid_layer.crs())
         clipped_layers = {
             "Point": [],
             "Line": [],
