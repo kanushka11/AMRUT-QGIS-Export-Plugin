@@ -129,8 +129,7 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
                     params = {
                         'INPUT': reprojected_raster,  # Input raster file path
                         'OUTPUT': tile_output_dir,  # Output tile directory
-                        'MIN_ZOOM_LEVEL': 16,
-                        'MAX_ZOOM_LEVEL': 21, # Adjust zoom levels as needed
+                        'ZOOM' : '16-21',
                         'TILE_FORMAT': 'png',  # Adjust format if needed
                         'RESAMPLING': 0,  # Default is nearest neighbor (adjust if needed)
                         'TMS_CONVENTION': True,  # Use TMS-compatible tiles (flipped Y-coordinate)
