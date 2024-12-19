@@ -29,10 +29,11 @@ def check_geometries_and_extents(layers):
     invalid_geometries = []
     all_extents = []
     valid = True
+    one_raster = False
 
     for i, layer in enumerate(layers):
         if not layer.isValid():
-            raise Exception(f"The layer {layer.name()} is invalid or has been deleted. Please restart QGIS")
+            raise Exception(f"The layer {layer.name()} is invalid or has been deleted. Please restart QGIS.")
 
         if layer.type() == QgsVectorLayer.VectorLayer:
             for feature in layer.getFeatures():
@@ -40,14 +41,21 @@ def check_geometries_and_extents(layers):
                     invalid_geometries.append((layer.name(), feature.id()))
                     valid = False
             all_extents.append(layer.extent())
+        if layer.type() == QgsRasterLayer.RasterLayer :
+            if one_raster :
+                valid = False
+                raise Exception(f"More than One Raster Layer found, the process only supports One raster layer.")
+            else :
+                one_raster = True
+
 
     combined_extent = QgsRectangle()
     for extent in all_extents:
         combined_extent.combineExtentWith(extent)
 
-    if combined_extent.isEmpty():
-        valid = False
-        raise Exception("No overlapping extents found among layers.")
+    if combined_extent.isEmpty() and all_extents:
+            valid = False
+            raise Exception("No overlapping extents found among layers.")
 
     if invalid_geometries:
         valid = False
