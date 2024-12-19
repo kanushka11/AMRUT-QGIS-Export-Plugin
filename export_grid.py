@@ -24,7 +24,7 @@ from qgis.core import (
 from qgis.PyQt.QtGui import QIcon, QFont
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QVariant,Qt
 from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QProgressDialog
-from .import geometry
+from .import export_geometry as geometry
 import os
 import uuid
 

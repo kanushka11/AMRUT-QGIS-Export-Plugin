@@ -1,5 +1,5 @@
 from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject
-from . import geometry, clip, grid
+from . import export_geometry as geometry, export_clip as clip, export_grid as grid
 from qgis.core import QgsMessageLog, Qgis
 from qgis.core import QgsVectorLayer
 

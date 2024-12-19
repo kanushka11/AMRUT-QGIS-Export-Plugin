@@ -30,7 +30,7 @@ import csv
 import subprocess
 import shutil
 import json
-from . import rename_tiles as tiles
+from . import export_rename_tiles as tiles
 
 
 
@@ -335,7 +335,7 @@ def create_archive (grid_dir, archive_name) :
         tiles_dir = None
         for root, dirs, files in os.walk(grid_dir):
             for file in files:
-                if file != "location.html" or file != "location.kml":
+                if file not in ["location.html", "location.kml"]:
                     files_to_compress.append(os.path.join(root, file))
             if "tiles" in dirs:
                 tiles_dir = os.path.join(root, "tiles")

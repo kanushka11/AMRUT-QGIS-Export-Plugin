@@ -28,8 +28,8 @@ from qgis.core import (
     QgsApplication
 )
 from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject, QThread
-from . import clip, grid, geometry, ui
-from . import workers
+from . import export_clip as clip, export_grid as grid, export_geometry as geometry, export_ui as ui
+from . import export_workers as workers
 import os
 import sip
 
