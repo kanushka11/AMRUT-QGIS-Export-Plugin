@@ -31,6 +31,9 @@ def check_geometries_and_extents(layers):
     valid = True
 
     for i, layer in enumerate(layers):
+        if not layer.isValid():
+            raise Exception(f"The layer {layer.name()} is invalid or has been deleted. Please restart QGIS")
+
         if layer.type() == QgsVectorLayer.VectorLayer:
             for feature in layer.getFeatures():
                 if not feature.geometry().isGeosValid():

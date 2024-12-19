@@ -31,6 +31,8 @@ from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject, QThread
 from . import clip, grid, geometry, ui
 from . import workers
 import os
+import sip
+
 
 selectedLayers = []
 gridLayer = None
@@ -44,6 +46,7 @@ clipping_tab_index = 2
 class ClipMergeExportTabDialog(QDialog):
     def __init__(self, iface):
         super().__init__()
+        self.thread = QThread()
         self.iface = iface
         self.setWindowTitle("AMRUT 2.0 Export Data")
         self.setMinimumSize(700, 500)
@@ -86,6 +89,17 @@ class ClipMergeExportTabDialog(QDialog):
 
         layout.addLayout(self.navigation_layout)
 
+    def closeEvent(self, event):
+        """Handle cleanup on dialog close."""
+        # Stop all running threads
+        if hasattr(self, 'thread') and self.thread:
+            if not sip.isdeleted(self.thread):  # Check if the thread is already deleted
+                if self.thread.isRunning():
+                    self.thread.quit()
+                    self.thread.wait()
+
+        event.accept()  # Allow the dialog to close
+
 
     def create_layer_selection_tab(self):
         """Creates the Layer Selection tab."""
@@ -100,7 +114,8 @@ class ClipMergeExportTabDialog(QDialog):
             item.setCheckState(Qt.Unchecked)
             self.layer_list_widget.addItem(item)
 
-        # Connect itemChanged signal to dynamically update selectedLayers
+        global  selectedLayers
+        selectedLayers = []
         self.layer_list_widget.itemChanged.connect(self.update_selected_layers)
 
         layout.addWidget(QLabel("Select Layers:"))

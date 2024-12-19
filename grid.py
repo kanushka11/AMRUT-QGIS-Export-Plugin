@@ -114,8 +114,8 @@ def create_grid_within_single_polygon(selectedLayers,polygon_layer, grid_size, c
         # Generate the grid cells and clip them to the polygon geometry
         combined_extent_of_selected_layers = geometry.getExtent(selectedLayers)
         extent_of_polygon_layer = geometry.getExtent([polygon_layer])
-        if not extent_of_polygon_layer.contains(combined_extent_of_selected_layers) :
-            raise Exception("Extent Mismatch : Selected Layers extent is greater than that of Boundary Layer")
+        # if not extent_of_polygon_layer.contains(combined_extent_of_selected_layers) :
+        #     raise Exception("Extent Mismatch : Selected Layers extent is greater than that of Boundary Layer")
 
         grid_layer = create_grid_layer(extent_of_polygon_layer.toRectF().getCoords(),grid_size, crs)
 

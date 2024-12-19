@@ -2,7 +2,7 @@ from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QVariant,
 from qgis.PyQt.QtGui import QIcon, QFont
 from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QProgressDialog, QDialog,QVBoxLayout,QPushButton,QLabel
 from . import main_dialog
-from qgis.core import QgsApplication,  QgsMessageLog, Qgis
+from qgis.core import QgsApplication,  QgsMessageLog, Qgis,   QgsProject,  QgsVectorLayer, QgsRasterLayer
 
 
 import processing
@@ -94,8 +94,18 @@ class AMRUT:
             self.iface.removePluginMenu(self.tr(u'&AMRUT'), action)
             self.iface.removeToolBarIcon(action)
 
+
+
     def run(self):
         try :
+            if not self.is_project_saved():
+                self.show_error("Please save the QGIS project before proceeding.")
+                return
+
+            if self.is_any_layer_in_editing_mode():
+                self.show_error("Please ensure no layers are in editing mode before proceeding.")
+                return
+
             self.required_algorithms = ["qgis:clip", 'gdal:cliprasterbymasklayer', 'gdal:gdal2tiles', 'gdal:warpreproject']
             self.prerequisits_avalaible = True
             for algorithm in self.required_algorithms :
@@ -106,7 +116,7 @@ class AMRUT:
                 mainDialog = main_dialog.ClipMergeExportTabDialog(self.iface)
                 mainDialog.exec_()
             else :
-                error_msg = f"""Please make sure the following Algorithms are available from processing : {self.required_algorithms}"""
+                error_msg = f"""Please make sure the following Algorithms are available from Core Plugin Processing : {self.required_algorithms}"""
                 self.show_error(error_msg)
         except Exception as e :
             raise  Exception(str(e))
@@ -140,6 +150,24 @@ class AMRUT:
         # Log the error in the QGIS message log
         QgsMessageLog.logMessage(str(error), 'AMRUT', Qgis.Critical)
 
+    def is_project_saved(self):
+        """Check if the QGIS project is saved."""
+        project = QgsProject.instance()
+        return not project.isDirty()  # isDirty() returns True if the project has unsaved changes
+
+    def is_any_layer_in_editing_mode(self):
+        """Check if any layer in the project is in editing mode."""
+        layers = QgsProject.instance().mapLayers().values()
+        for layer in layers:
+            # Check for vector layer editing mode
+            if isinstance(layer, QgsVectorLayer) and layer.isEditable():
+                return True
+            # Check for raster layer editing mode (if applicable)
+            if isinstance(layer, QgsRasterLayer):
+                provider = layer.dataProvider()
+                if provider.isEditable():  # Check if raster layer's data provider allows editing
+                    return True
+        return False
 
 
 
