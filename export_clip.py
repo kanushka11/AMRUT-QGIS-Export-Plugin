@@ -51,7 +51,6 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
         current_step = i
 
 
-
         grid_cell_geom = feature.geometry()
         grid_cell_id = feature["id"]
 
@@ -65,7 +64,7 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
 
         temp_layer = QgsVectorLayer(
             "Polygon?crs={}".format(grid_layer.crs().authid()), 
-            f"grid_cell_{grid_cell_id}", "memory"
+            f"grid_cell_{grid_cell_id}", "org"
         )
         temp_layer_data = temp_layer.dataProvider()
         temp_layer_data.addAttributes(grid_layer.fields())
@@ -169,6 +168,7 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
         archive_name = os.path.join(grid_dir, f"grid_{grid_cell_id}")
         create_archive(grid_dir,archive_name)
         progress_signal.emit(current_step)
+        del temp_layer
 
 def create_kml_file(layer, grid_dir, crs) :
     kml_file_path = os.path.join(grid_dir, f"location.kml")
