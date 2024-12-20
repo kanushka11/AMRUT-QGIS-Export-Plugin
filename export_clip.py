@@ -64,7 +64,7 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
 
         temp_layer = QgsVectorLayer(
             "Polygon?crs={}".format(grid_layer.crs().authid()), 
-            f"grid_cell_{grid_cell_id}", "org"
+            f"grid_cell_{grid_cell_id}", "memory"
         )
         temp_layer_data = temp_layer.dataProvider()
         temp_layer_data.addAttributes(grid_layer.fields())
