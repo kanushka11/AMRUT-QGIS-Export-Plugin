@@ -259,16 +259,12 @@ def merge_clipped_layers (layers_path, merged_layer_path, geometry_type,crs, gri
     for path in layers_path:
         layer = QgsVectorLayer(path, "temp_layer", "ogr")
         if not layer.isValid():
-            QMessageBox.warning(None, "Warning", f"Invalid layer: {path}")
             continue
         if layer.featureCount() > 0:
             valid_layers.append(path)
-        else:
-            print(f"Skipped empty GeoJSON: {path}")
 
     # If no valid layers exist, exit
     if not valid_layers:
-        QMessageBox.warning(None, "Error", f"No valid {geometry_type} layers to merge for Grid/Segment Id : {grid_cell_id} \n Click OK to proceed")
         return
 
     merge_params = {
