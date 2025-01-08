@@ -3,6 +3,7 @@ from qgis.PyQt.QtGui import QIcon, QFont
 from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QProgressDialog, QDialog,QVBoxLayout,QPushButton,QLabel
 from . import main_dialog
 from qgis.core import QgsApplication,  QgsMessageLog, Qgis,   QgsProject,  QgsVectorLayer, QgsRasterLayer
+from . import open_dialog
 
 
 import processing
@@ -97,29 +98,37 @@ class AMRUT:
 
 
     def run(self):
-        try :
-            if not self.is_project_saved():
-                self.show_error("Please save the QGIS project before proceeding.")
+        try:
+            # Step 1: Ask if the user wants to use the plugin
+            pluginUsageDialog = open_dialog.OpenPluginDialog(self.iface)
+            result = pluginUsageDialog.exec_()
+
+            if result == QDialog.Accepted:
+                if not self.is_project_saved():
+                    self.show_error("Please save the QGIS project before proceeding.")
+                    return
+
+                if self.is_any_layer_in_editing_mode():
+                    self.show_error("Please ensure no layers are in editing mode before proceeding.")
+                    return
+
+                self.required_algorithms = ["qgis:clip", 'gdal:cliprasterbymasklayer', 'gdal:gdal2tiles', 'gdal:warpreproject']
+                self.prerequisits_avalaible = True
+                for algorithm in self.required_algorithms:
+                    if not self.is_algorithm_available(algorithm):
+                        self.prerequisits_avalaible = False
+
+                if self.prerequisits_avalaible:
+                    mainDialog = main_dialog.ClipMergeExportTabDialog(self.iface)
+                    mainDialog.exec_()
+                else:
+                    error_msg = f"""Please make sure the following Algorithms are available from Core Plugin Processing: {self.required_algorithms}"""
+                    self.show_error(error_msg)
+            else:
                 return
 
-            if self.is_any_layer_in_editing_mode():
-                self.show_error("Please ensure no layers are in editing mode before proceeding.")
-                return
-
-            self.required_algorithms = ["qgis:clip", 'gdal:cliprasterbymasklayer', 'gdal:gdal2tiles', 'gdal:warpreproject']
-            self.prerequisits_avalaible = True
-            for algorithm in self.required_algorithms :
-                if not self.is_algorithm_available(algorithm) :
-                    self.prerequisits_avalaible = False
-
-            if(self.prerequisits_avalaible) :
-                mainDialog = main_dialog.ClipMergeExportTabDialog(self.iface)
-                mainDialog.exec_()
-            else :
-                error_msg = f"""Please make sure the following Algorithms are available from Core Plugin Processing : {self.required_algorithms}"""
-                self.show_error(error_msg)
-        except Exception as e :
-            raise  Exception(str(e))
+        except Exception as e:
+            raise Exception(str(e))
 
     def is_algorithm_available(self, algorithm_id):
         """Check if a processing algorithm is available."""
