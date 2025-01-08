@@ -50,7 +50,7 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
     for i, feature in enumerate(grid_layer.getFeatures()):
         current_step = i
 
-
+        layers_name = []
         grid_cell_geom = feature.geometry()
         grid_cell_id = feature["id"]
 
@@ -86,7 +86,8 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
         for layer in layers:
             if layer.type() == QgsVectorLayer.VectorLayer:  # Handle vector layers
                 geometry_type = QgsWkbTypes.flatType(layer.wkbType())
-                output_path = os.path.join(grid_dir, f"{layer.name()}_clipped.geojson")
+                layers_name.append(layer.name())
+                output_path = os.path.join(grid_dir, f"{layer.name()}.geojson")
                 clip_params = {
                     'INPUT': layer,
                     'OVERLAY': temp_layer,
@@ -142,7 +143,7 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
                     remove_files([output_path, reprojected_raster])
                 except Exception as e:
                     QMessageBox.warning(None, "Error", f"Error clipping raster layer '{layer.name()}' with grid cell {grid_cell_id}: {e}")
-        
+
         geometry_output_files = {
             "Point": os.path.join(grid_dir, "point.geojson"),
             "Line": os.path.join(grid_dir, "line.geojson"),
@@ -164,7 +165,9 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
                 ""  # Submission date (empty)
             ])
 
-        # Define a unique archive name separate from the directory
+
+        create_metadata(grid_name=f"grid_{grid_cell_id}", grid_layer=temp_layer, grid_dir=grid_dir,
+                        layers_name=layers_name, crs=grid_layer.crs())
         archive_name = os.path.join(grid_dir, f"grid_{grid_cell_id}")
         create_archive(grid_dir,archive_name)
         progress_signal.emit(current_step)
@@ -187,7 +190,6 @@ def create_html_file(layer, grid_dir, crs):
     Creates an HTML file with a script that redirects to Google Maps for the polygon feature.
     """
     html_file_path = os.path.join(grid_dir, f"location.html")
-    json_file_path = os.path.join(grid_dir, "metadata.json")
     target_crs = QgsCoordinateReferenceSystem("EPSG:4326")
     transform = QgsCoordinateTransform(crs, target_crs, QgsProject.instance())
     # Get the geometry of the first feature (assuming only one feature per layer)
@@ -233,24 +235,37 @@ def create_html_file(layer, grid_dir, crs):
         </body>
         </html>
         """
-    #metadata Json
-    bounding_box = geometry.boundingBox()
-    bounding_box_dict = {
-        "north": bounding_box.yMaximum(),
-        "south": bounding_box.yMinimum(),
-        "east": bounding_box.xMaximum(),
-        "west": bounding_box.xMinimum()
-    }
-
-    # Write the bounding box to a JSON file
-    with open(json_file_path, 'w', encoding='utf-8') as json_file:
-        json.dump(bounding_box_dict, json_file, indent=4)
 
     # Save the HTML file
     with open(html_file_path, 'w', encoding='utf-8') as html_file:
         html_file.write(html_content)
 
+def create_metadata(grid_name,grid_layer, grid_dir, layers_name, crs) :
+    json_file_path = os.path.join(grid_dir, "metadata.json")
+    target_crs = QgsCoordinateReferenceSystem("EPSG:4326")
+    transform = QgsCoordinateTransform(crs, target_crs, QgsProject.instance())
 
+    # Get the geometry of the first feature (assuming only one feature per layer)
+    grid_layer.startEditing()
+    feature = next(grid_layer.getFeatures(), None)
+    grid_layer.commitChanges()
+
+    if not feature:
+        raise ValueError("No feature found in the layer.")
+
+    geometry = feature.geometry()
+    geometry.transform(transform)
+    bounding_box = geometry.boundingBox()
+    metadata = {
+        "north": bounding_box.yMaximum(),
+        "south": bounding_box.yMinimum(),
+        "east": bounding_box.xMaximum(),
+        "west": bounding_box.xMinimum(),
+        "layers" : layers_name,
+        "grid" : grid_name
+    }
+    with open(json_file_path, 'w', encoding='utf-8') as json_file:
+        json.dump(metadata, json_file, indent=4)
         
 
 def merge_clipped_layers (layers_path, merged_layer_path, geometry_type,crs, grid_cell_id) :
