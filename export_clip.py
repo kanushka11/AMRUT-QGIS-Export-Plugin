@@ -47,6 +47,41 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
         csv_writer = csv.writer(csv_file)
         csv_writer.writerow(["grid_name", "creation_date", "assigned_to_surveyor", "submission_date"])
 
+    feature_id_value = 1
+
+    for layer in layers:
+        if layer.type() == QgsVectorLayer.VectorLayer:
+            layer.startEditing()
+
+            index_of_layer = layer.fields().indexOf('layer')
+
+            if index_of_layer >= 0:  # Check if layer field already exists
+                # Get the index of the 'layer' field and remove it
+                layer.dataProvider().deleteAttributes([index_of_layer])
+                layer.updateFields()  # Update fields in the layer
+
+            index_of_feature_id = layer.fields().indexOf('feature_id')
+
+            if index_of_feature_id < 0:  # Check if feature_id field already exists
+                # Add a new field 'feature_id' of type Integer
+                layer.dataProvider().addAttributes([QgsField('feature_id', QVariant.Int)])
+                layer.updateFields()  # Update fields in the layer
+
+            # Prepare a dictionary of feature IDs and their updated values
+            change_dict = {}
+            
+            # Collect changes for assigning unique feature IDs
+            for feature in layer.getFeatures():
+                change_dict[feature.id()] = {index_of_feature_id: feature_id_value}
+                feature_id_value += 1
+
+            # Use dataProvider.changeAttributeValues() for bulk update
+            layer.dataProvider().changeAttributeValues(change_dict)
+
+            # Commit changes
+            layer.commitChanges()
+
+
     for i, feature in enumerate(grid_layer.getFeatures()):
         current_step = i
 
