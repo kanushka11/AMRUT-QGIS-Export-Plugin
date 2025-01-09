@@ -4,6 +4,7 @@ from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QProgressDial
 from . import main_dialog
 from qgis.core import QgsApplication,  QgsMessageLog, Qgis,   QgsProject,  QgsVectorLayer, QgsRasterLayer
 from . import open_dialog
+from . import open_dialog
 
 
 import processing
@@ -95,40 +96,78 @@ class AMRUT:
             self.iface.removePluginMenu(self.tr(u'&AMRUT'), action)
             self.iface.removeToolBarIcon(action)
 
-
-
+    
+    
     def run(self):
         try:
             # Step 1: Ask if the user wants to use the plugin
             pluginUsageDialog = open_dialog.OpenPluginDialog(self.iface)
-            result = pluginUsageDialog.exec_()
-
-            if result == QDialog.Accepted:
-                if not self.is_project_saved():
-                    self.show_error("Please save the QGIS project before proceeding.")
-                    return
-
-                if self.is_any_layer_in_editing_mode():
-                    self.show_error("Please ensure no layers are in editing mode before proceeding.")
-                    return
-
-                self.required_algorithms = ["qgis:clip", 'gdal:cliprasterbymasklayer', 'gdal:gdal2tiles', 'gdal:warpreproject']
-                self.prerequisits_avalaible = True
-                for algorithm in self.required_algorithms:
-                    if not self.is_algorithm_available(algorithm):
-                        self.prerequisits_avalaible = False
-
-                if self.prerequisits_avalaible:
-                    mainDialog = main_dialog.ClipMergeExportTabDialog(self.iface)
-                    mainDialog.exec_()
+            
+            if pluginUsageDialog.exec_() == QDialog.Accepted:
+                action = pluginUsageDialog.get_action()  # Get the selected action
+                
+                if action == 'export':
+                    self.handle_export()
+                elif action == 'import':
+                    self.handle_import()
                 else:
-                    error_msg = f"""Please make sure the following Algorithms are available from Core Plugin Processing: {self.required_algorithms}"""
-                    self.show_error(error_msg)
-            else:
-                return
+                    return
 
         except Exception as e:
-            raise Exception(str(e))
+            self.show_error(f"An error occurred: {str(e)}")
+
+    def handle_export(self):
+        if not self.is_project_saved():
+            self.show_error("Please save the QGIS project before proceeding.")
+            return
+        try:
+            # Step 1: Ask if the user wants to use the plugin
+            pluginUsageDialog = open_dialog.OpenPluginDialog(self.iface)
+            
+            if pluginUsageDialog.exec_() == QDialog.Accepted:
+                action = pluginUsageDialog.get_action()  # Get the selected action
+                
+                if action == 'export':
+                    self.handle_export()
+                elif action == 'import':
+                    self.handle_import()
+                else:
+                    return
+
+        except Exception as e:
+            self.show_error(f"An error occurred: {str(e)}")
+
+    def handle_export(self):
+        if not self.is_project_saved():
+            self.show_error("Please save the QGIS project before proceeding.")
+            return
+
+        if self.is_any_layer_in_editing_mode():
+            self.show_error("Please ensure no layers are in editing mode before proceeding.")
+            return
+        if self.is_any_layer_in_editing_mode():
+            self.show_error("Please ensure no layers are in editing mode before proceeding.")
+            return
+
+        self.required_algorithms = ["qgis:clip", 'gdal:cliprasterbymasklayer', 'gdal:gdal2tiles', 'gdal:warpreproject']
+        prerequisites_available = True
+
+        for algorithm in self.required_algorithms:
+            if not self.is_algorithm_available(algorithm):
+                prerequisites_available = False
+
+        if prerequisites_available:
+            # Pass the open_dialog reference to ClipMergeExportTabDialog
+            mainDialog = main_dialog.ClipMergeExportTabDialog(self.iface)
+            mainDialog.exec_()  # Use exec_() to show the dialog and block until it finishes
+        else:
+            error_msg = f"""Please make sure the following Algorithms are available from Core Plugin Processing: {self.required_algorithms}"""
+            self.show_error(error_msg)
+
+
+    def handle_import(self):
+        # Logic for handling import functionality goes here
+        return    
 
     def is_algorithm_available(self, algorithm_id):
         """Check if a processing algorithm is available."""
@@ -177,9 +216,3 @@ class AMRUT:
                 if provider.isEditable():  # Check if raster layer's data provider allows editing
                     return True
         return False
-
-
-
-
-
-
