@@ -66,7 +66,8 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
                 # Add a new field 'feature_id' of type Integer
                 layer.dataProvider().addAttributes([QgsField('feature_id', QVariant.Int)])
                 layer.updateFields()  # Update fields in the layer
-
+                index_of_feature_id = layer.fields().indexOf('feature_id')
+            
             # Prepare a dictionary of feature IDs and their updated values
             change_dict = {}
             
