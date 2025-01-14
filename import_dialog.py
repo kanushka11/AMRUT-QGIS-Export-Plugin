@@ -1,8 +1,11 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QPushButton, QFileDialog, QMessageBox, QLabel, QLineEdit
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QPushButton, QFileDialog, QMessageBox, QLabel, QLineEdit, QHBoxLayout, QComboBox
 from PyQt5.QtCore import Qt
 
 from . import open_dialog
 import zipfile
+import json
+
+from qgis.core import QgsProject
 
 class ImportDialog(QDialog):
     def __init__(self, iface):
@@ -14,7 +17,7 @@ class ImportDialog(QDialog):
         # Create a custom dialog for the options
         dialog = QDialog(self)
         dialog.setWindowTitle("Choose Action")
-        dialog.setFixedSize(300, 200)  # Set the dialog size to make it larger
+        dialog.setFixedSize(300, 200)
 
         # Set up layout for the dialog
         layout = QVBoxLayout(dialog)
@@ -29,8 +32,8 @@ class ImportDialog(QDialog):
         quality_check_button = QPushButton("Quality Check", dialog)
 
         # Set button size
-        reconstruct_button.setFixedSize(200, 25)  # Make buttons larger
-        quality_check_button.setFixedSize(200, 25)  # Make buttons larger
+        reconstruct_button.setFixedSize(200, 25)
+        quality_check_button.setFixedSize(200, 25)
 
         # Add buttons to the layout and center them
         layout.addWidget(reconstruct_button, alignment=Qt.AlignCenter)
@@ -43,84 +46,119 @@ class ImportDialog(QDialog):
         # Show the dialog
         dialog.exec_()
 
+
     def reconstruct_dialog(self, dialog):
         # Close the current dialog (reconstruct_or_qc_dialog)
         dialog.accept()  # This closes the current dialog
 
 
     def quality_check_dialog(self, dialog):
-        # Create a new dialog for the quality check
+        # Close the current dialog
+        dialog.accept()
+
+        # Create a new dialog for the Quality Check
         qc_dialog = QDialog(self)
         qc_dialog.setWindowTitle("Quality Check")
+        qc_dialog.setFixedSize(500, 200)
 
         # Set up layout for the dialog
         layout = QVBoxLayout(qc_dialog)
 
-        # Input box to select the file with .amrut extension
+        # File input field and Browse button
+        file_layout = QHBoxLayout()
         self.file_input = QLineEdit(qc_dialog)
         self.file_input.setPlaceholderText("Select a .amrut file...")
-        layout.addWidget(self.file_input)
+        file_layout.addWidget(self.file_input)
 
-        # Button to browse for a file
         browse_button = QPushButton("Browse", qc_dialog)
-        layout.addWidget(browse_button)
+        file_layout.addWidget(browse_button)
         browse_button.clicked.connect(self.browse_file)
+        layout.addLayout(file_layout)
 
-        # Proceed and cancel buttons
-        proceed_button = QPushButton("Proceed", qc_dialog)
-        cancel_button = QPushButton("Cancel", qc_dialog)
+        # Dropdown to select a single layer
+        layer_selection_layout = QHBoxLayout()
+        self.layer_dropdown = QComboBox(qc_dialog)
+        self.layer_dropdown.setPlaceholderText("Select layer to check")
+        self.layer_dropdown.setEnabled(False)  # Initially disabled
+        layer_selection_layout.addWidget(QLabel("Select layer to check:", qc_dialog))
+        layer_selection_layout.addWidget(self.layer_dropdown)
+        layout.addLayout(layer_selection_layout)
 
-        layout.addWidget(proceed_button)
-        layout.addWidget(cancel_button)
-
-        # Connect the buttons to their respective actions
-        proceed_button.clicked.connect(self.proceed_with_quality_check)
-        cancel_button.clicked.connect(qc_dialog.reject)
-
-        # Execute the quality check dialog
+        # Show the Quality Check dialog
         qc_dialog.exec_()
-
 
     def browse_file(self):
         # Open file dialog to select a file
         file, _ = QFileDialog.getOpenFileName(self, "Select a File", "", "AMRUT Files (*.amrut);;All Files (*)")
-        
-        if file:  # If a file was selected
+
+        if file:
             if file.endswith(".amrut"):
-                # Check if it's a ZIP file and contains metadata.json
-                if self.is_valid_amrut_file(file):
-                    self.file_input.setText(file)  # Set the file path in the input box
-                else:
-                    QMessageBox.warning(self, "Invalid File", "The .amrut file must contain a 'metadata.json' file inside the ZIP.")
-                    self.file_input.clear()  # Clear the input box to prompt for valid file again
+                # Validate the .amrut file
+                self.validate_amrut_file(file)
             else:
-                # Show an error message if the file is not .amrut
                 QMessageBox.warning(self, "Invalid File", "Please select a valid .amrut file.")
-                self.file_input.clear()  # Clear the input box to prompt for valid file again
+                self.file_input.clear()
 
-    def is_valid_amrut_file(self, file_path):
-        """Check if the selected .amrut file is a ZIP file and contains metadata.json."""
+    def validate_amrut_file(self, file_path):
+        """Validate the .amrut file, including metadata and GeoJSON files."""
         try:
-            # Check if it's a zip file and contains metadata.json
             with zipfile.ZipFile(file_path, 'r') as zip_ref:
-                if 'metadata.json' in zip_ref.namelist():
-                    return True
-                else:
-                    return False
-        except zipfile.BadZipFile:
-            # Handle the case where the file is not a valid ZIP file
-            QMessageBox.warning(self, "Invalid ZIP", "The selected file is not a valid ZIP file.")
-            return False
+                # Check if metadata.json exists
+                if 'metadata.json' not in zip_ref.namelist():
+                    QMessageBox.warning(self, "Invalid File", "The file does not contain 'metadata.json'.")
+                    self.file_input.clear()
+                    return
 
-    def proceed_with_quality_check(self):
-        # Logic for proceeding with quality check
-        file_path = self.file_input.text()
+                # Load metadata.json
+                metadata = json.loads(zip_ref.read('metadata.json'))
 
-        if not file_path:
-            QMessageBox.warning(self, "No File Selected", "Please select a valid .amrut file to proceed.")
-            return
+                # Check if layers array exists in metadata
+                if 'layers' not in metadata or not isinstance(metadata['layers'], list):
+                    QMessageBox.warning(self, "Invalid Metadata", "'layers' array is missing or invalid in metadata.json.")
+                    self.file_input.clear()
+                    return
 
-        # Proceed with the quality check using the selected file
-        print(f"Proceeding with quality check on file: {file_path}")
-        # Further logic for quality check can go here...
-            
+                # Validate GeoJSON files in the .amrut archive
+                missing_files = [
+                    layer for layer in metadata['layers']
+                    if f"{layer}.geojson" not in zip_ref.namelist()
+                ]
+                if missing_files:
+                    QMessageBox.warning(
+                        self,
+                        "Missing GeoJSON Files",
+                        f"The following GeoJSON files are missing in the .amrut file: {', '.join(missing_files)}"
+                    )
+                    self.file_input.clear()
+                    return
+
+                # Validate GeoJSON files in the QGIS project
+                project_layers = [layer.name() for layer in QgsProject.instance().mapLayers().values()]
+                missing_in_project = [
+                    layer for layer in metadata['layers']
+                    if layer not in project_layers
+                ]
+                if missing_in_project:
+                    QMessageBox.warning(
+                        self,
+                        "Missing Layers in QGIS",
+                        f"The following layers are missing in the QGIS project: {', '.join(missing_in_project)}"
+                    )
+                    self.file_input.clear()
+                    return
+
+                # If all validations pass, populate the dropdown
+                self.file_input.setText(file_path)
+                self.populate_layer_dropdown(metadata['layers'])
+                QMessageBox.information(self, "Validation Successful", "All checks passed successfully!")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+            self.file_input.clear()
+
+    def populate_layer_dropdown(self, layers):
+        """Populate the dropdown with layers from the metadata."""
+        self.layer_dropdown.clear()
+        self.layer_dropdown.addItems(layers)
+        self.layer_dropdown.setEnabled(True)
+        
