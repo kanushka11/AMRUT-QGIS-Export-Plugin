@@ -20,12 +20,12 @@ class OpenPluginDialog(QDialog):
 
         # Create the Export button
         self.export_button = QPushButton("Data to Mobile", self)
-        self.export_button.setFixedWidth(200)  # Set fixed width for consistency
+        self.export_button.setFixedSize(200, 25)  # Set fixed width for consistency
         self.export_button.clicked.connect(self.on_export)
 
         # Create the Import button
         self.import_button = QPushButton("Data from Mobile", self)
-        self.import_button.setFixedWidth(200)  # Set fixed width for consistency
+        self.import_button.setFixedSize(200, 25)  # Set fixed width for consistency
         self.import_button.clicked.connect(self.on_import)
 
         # Add buttons to the layout and center them
