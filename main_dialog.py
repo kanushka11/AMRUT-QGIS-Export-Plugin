@@ -55,7 +55,7 @@ class ClipMergeExportTabDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # Tab widget
-        self.logo_layout = ui.createLogoLayout()
+        self.logo_layout = ui.createLogoLayout("Export Data for Mobile App")
         self.tabs = QTabWidget()
         self.tabs.setTabBarAutoHide(True)  # Hides the tab bar
         self.tabs.setTabBar(self.CustomTabBar())
