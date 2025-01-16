@@ -1,11 +1,12 @@
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QPushButton, QFileDialog, QMessageBox, QLabel, QLineEdit, QHBoxLayout, QComboBox
+    QDialog, QVBoxLayout, QPushButton, QFileDialog, QMessageBox, QLabel, QLineEdit, QHBoxLayout, QComboBox, QApplication
 )
 from PyQt5.QtCore import Qt
 
-from . import export_ui as ui
+from . import qc_visualization_dialog as qc
 import zipfile
 import json
+from . import export_ui as ui
 from qgis.core import QgsProject, QgsMapLayer
 
 class ImportDialog(QDialog):
@@ -13,7 +14,6 @@ class ImportDialog(QDialog):
         super().__init__()
         self.iface = iface
         self.setWindowTitle("Import Dialog")
-        metadata_bounds = {}
 
     def reconstruct_or_qc_dialog(self):
         dialog = self._create_dialog("AMRUT 2.0", 350, 200)
@@ -176,27 +176,40 @@ class ImportDialog(QDialog):
             return False
 
         return True
-    
+
+
     def proceed_quality_check(self):
-        selected_layer = self.layer_dropdown.currentText()
-        if selected_layer == "Select any layer for Quality Check" or not selected_layer:
+        selected_layer_name = self.layer_dropdown.currentText()
+        if selected_layer_name == "Select any layer for Quality Check" or not selected_layer_name:
             QMessageBox.warning(self, "No Layer Selected", "Please select a valid layer for quality check.")
             return
-        else:
-            selected_raster_layer = self.raster_layer_dropdown.currentText()
-            if selected_raster_layer != "Select a Raster Layer":
-                raster_layer = next(
-                    (layer for layer in QgsProject.instance().mapLayers().values()
-                    if layer.name() == selected_raster_layer and layer.type() == QgsMapLayer.RasterLayer),
-                    None
-                )
-                extent = raster_layer.extent()
-                raster_bounds = {"north": extent.yMaximum(), "south": extent.yMinimum(),
-                                "east": extent.xMaximum(), "west": extent.xMinimum()}
-                if not all(raster_bounds[key] >= self.metadata_bounds[key] for key in ["north", "east"]) or \
-                not all(raster_bounds[key] <= self.metadata_bounds[key] for key in ["south", "west"]):
-                    QMessageBox.warning(self, "Extent Validation Failed",
-                                        "The selected raster layer's extent does not cover the metadata extent.")
-                    return
-                # else:
-                #     QMessageBox.information(self, "Proceeding", f"Proceeding with Quality Check for layer: {selected_layer}")
+
+        selected_raster_layer_name = self.raster_layer_dropdown.currentText()
+        if selected_raster_layer_name != "Select a Raster Layer":
+            raster_layer = next(
+                (layer for layer in QgsProject.instance().mapLayers().values()
+                if layer.name() == selected_raster_layer_name and layer.type() == QgsMapLayer.RasterLayer),
+                None
+            )
+            extent = raster_layer.extent()
+            raster_bounds = {
+                "north": extent.yMaximum(), "south": extent.yMinimum(),
+                "east": extent.xMaximum(), "west": extent.xMinimum()
+            }
+            if not all(raster_bounds[key] >= self.metadata_bounds[key] for key in ["north", "east"]) or \
+            not all(raster_bounds[key] <= self.metadata_bounds[key] for key in ["south", "west"]):
+                QMessageBox.warning(self, "Extent Validation Failed",
+                                    "The selected raster layer's extent does not cover the metadata extent.")
+                return
+
+        # Close the current dialog
+        self.accept()
+
+        # Open the new dialog, passing the AMRUT file path
+        qualityCheckVisualizationDialog = qc.QualityCheckVisualizationDialog(
+            self,
+            selected_layer_name=selected_layer_name,
+            amrut_file_path=self.file_input.text()  
+        )
+
+        qualityCheckVisualizationDialog.exec_()
