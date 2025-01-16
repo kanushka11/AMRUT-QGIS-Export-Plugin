@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QWidget
+from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel
 from PyQt5.QtCore import Qt
 from qgis.core import QgsProject, QgsVectorLayer
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
@@ -21,17 +21,18 @@ class QualityCheckVisualizationDialog(QDialog):
 
         # Left panel: Visualization of selected project layer
         layer = self.get_layer_by_name(self.selected_layer_name)
+
         if layer:
             left_panel = self.create_layer_visualization_panel(layer, "Selected Layer Visualization")
         else:
             left_panel = self.create_error_panel(f"Layer '{self.selected_layer_name}' not found.")
-        
+        layout.addLayout(left_panel)
+
+        # Add a vertical divider
+        self.add_vertical_divider(layout)
+
         # Right panel: Visualization of GeoJSON from AMRUT file
         right_panel = self.create_geojson_visualization_panel()
-
-        # Adding panels and vertical divider to layout
-        layout.addLayout(left_panel)
-        self.add_vertical_divider(layout)
         layout.addLayout(right_panel)
 
     def create_geojson_visualization_panel(self):
@@ -40,14 +41,25 @@ class QualityCheckVisualizationDialog(QDialog):
 
         # Load GeoJSON from AMRUT file
         geojson_layer = self.load_geojson_from_amrut(self.amrut_file_path, self.selected_layer_name)
-        if geojson_layer:
-            map_canvas = self.create_map_canvas(geojson_layer)
-            panel_layout.addWidget(map_canvas)
 
-            label = QLabel(f"AMRUT Layer Visualization: {self.selected_layer_name}")
-            label.setAlignment(Qt.AlignCenter)
-            panel_layout.addWidget(label)
+        if geojson_layer:
+            # Check if a layer with the prefix 'Temporary_' already exists in the project
+            temporary_layer_name = f"Temporary_{self.selected_layer_name}"
+            existing_layer = self.get_layer_by_name(temporary_layer_name)
+
+            if existing_layer:
+                # If a temporary layer with the same name exists, remove it
+                QgsProject.instance().removeMapLayer(existing_layer.id())
+
+            # Rename and add the GeoJSON layer with the prefix 'Temporary_'
+            geojson_layer.setName(temporary_layer_name)
+            QgsProject.instance().addMapLayer(geojson_layer)
+
+            # Create and return the visualization panel
+            panel_layout = self.create_layer_visualization_panel(geojson_layer, f"Visualization of {temporary_layer_name}")
+            return panel_layout
         else:
+            # If GeoJSON layer is not found, show an error message
             panel_layout.addWidget(QLabel("GeoJSON layer not found in AMRUT file."))
 
         return panel_layout
@@ -55,16 +67,25 @@ class QualityCheckVisualizationDialog(QDialog):
     def load_geojson_from_amrut(self, amrut_file_path, layer_name):
         """Extract and load the GeoJSON file from the AMRUT archive."""
         try:
+            # Open the AMRUT file (which is a zip)
             with zipfile.ZipFile(amrut_file_path, 'r') as zip_ref:
                 geojson_filename = f"{layer_name}.geojson"
 
                 if geojson_filename in zip_ref.namelist():
-                    # Extract and read the GeoJSON content
-                    with zip_ref.open(geojson_filename) as geojson_file:
-                        geojson_content = geojson_file.read().decode('utf-8')
+                    # Extract the GeoJSON content
+                    geojson_content = zip_ref.read(geojson_filename).decode('utf-8')
 
-                    # Create a temporary file to load the GeoJSON
-                    geojson_layer = QgsVectorLayer(geojson_content, layer_name, "GeoJSON")
+                    # Check if a temporary file with the prefix exists
+                    temp_dir = tempfile.gettempdir()
+                    temp_geojson_file_path = os.path.join(temp_dir, f"Temporary_{geojson_filename}")
+
+                    # Save the GeoJSON content to the temporary file
+                    with open(temp_geojson_file_path, 'w', encoding='utf-8') as temp_geojson_file:
+                        temp_geojson_file.write(geojson_content)
+
+                    # Load the GeoJSON into a vector layer using the temporary file path
+                    geojson_layer = QgsVectorLayer(temp_geojson_file_path, layer_name, "ogr")
+
                     if geojson_layer.isValid():
                         return geojson_layer
                     else:
@@ -85,7 +106,6 @@ class QualityCheckVisualizationDialog(QDialog):
     def create_layer_visualization_panel(self, layer, title):
         """Create a panel to visualize a specific project layer."""
         panel_layout = QVBoxLayout()
-        
         map_canvas = self.create_map_canvas(layer)
         panel_layout.addWidget(map_canvas)
 
@@ -98,36 +118,37 @@ class QualityCheckVisualizationDialog(QDialog):
     def create_map_canvas(self, layer):
         """Create a map canvas to render the given layer."""
         canvas = QgsMapCanvas()
-        
-        # Set canvas properties for better visualization
         canvas.setLayers([layer])
         canvas.setExtent(layer.extent())
         canvas.setCanvasColor(Qt.white)
-        
-        # Enable panning tool for better interaction
-        canvas.setMapTool(QgsMapToolPan(canvas))
-        
+        canvas.setMapTool(QgsMapToolPan(canvas))  # Enable panning
         canvas.refresh()
-        
         return canvas
 
     def create_error_panel(self, message):
         """Create a panel to display an error message."""
         panel_layout = QVBoxLayout()
-        
         error_label = QLabel(message)
         error_label.setAlignment(Qt.AlignCenter)
-        
         panel_layout.addWidget(error_label)
-        
+        return panel_layout
+
+    def create_placeholder_panel(self, title, message):
+        """Create a placeholder panel with a title and message."""
+        panel_layout = QVBoxLayout()
+        label = QLabel(title)
+        label.setAlignment(Qt.AlignCenter)
+        panel_layout.addWidget(label)
+
+        placeholder = QLabel(message)
+        placeholder.setAlignment(Qt.AlignCenter)
+        panel_layout.addWidget(placeholder)
+
         return panel_layout
 
     def add_vertical_divider(self, layout):
         """Add a vertical divider to the layout."""
-        
-        line_widget = QWidget()
-        
-        line_widget.setFixedWidth(2)  # Set width of divider line
-        line_widget.setStyleSheet("background-color: black;")  # Set color of divider
-        
-        layout.addWidget(line_widget)
+        line = QLabel()
+        line.setFixedWidth(1)
+        line.setStyleSheet("background-color: black;")
+        layout.addWidget(line)

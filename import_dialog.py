@@ -197,7 +197,7 @@ class ImportDialog(QDialog):
                 "east": extent.xMaximum(), "west": extent.xMinimum()
             }
             if not all(raster_bounds[key] >= self.metadata_bounds[key] for key in ["north", "east"]) or \
-            not all(raster_bounds[key] <= self.metadata_bounds[key] for key in ["south", "west"]):
+            not all(raster_bounds[key] >= self.metadata_bounds[key] for key in ["south", "west"]):
                 QMessageBox.warning(self, "Extent Validation Failed",
                                     "The selected raster layer's extent does not cover the metadata extent.")
                 return
