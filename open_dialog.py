@@ -24,13 +24,14 @@ class OpenPluginDialog(QDialog):
         self.export_button.clicked.connect(self.on_export)
 
         # Create the Import button
-        self.import_button = QPushButton("Data from Mobile", self)
-        self.import_button.setFixedWidth(200)  # Set fixed width for consistency
-        self.import_button.clicked.connect(self.on_import)
+        # self.import_button = QPushButton("Data from Mobile", self)
+        # self.import_button.setFixedWidth(200)  # Set fixed width for consistency
+        # self.import_button.clicked.connect(self.on_import)
 
         # Add buttons to the layout and center them
+        # Import button Disabled it is still work in progress.
         layout.addWidget(self.export_button, alignment=Qt.AlignCenter)
-        layout.addWidget(self.import_button, alignment=Qt.AlignCenter)
+        #layout.addWidget(self.import_button, alignment=Qt.AlignCenter)
 
         # Variable to store the action chosen by the user
         self.selected_action = None

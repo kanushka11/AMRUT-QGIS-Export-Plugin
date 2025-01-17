@@ -25,7 +25,7 @@ hasProcessingProvider=no
 # Tags are comma separated with spaces allowed
 tags=python
 
-homepage=https://amrut.iirs.gov.in/
+homepage=https://amrut.iirs.gov.in/amrut_plugin
 category=Plugin
 icon=icon.png
 # experimental flag
