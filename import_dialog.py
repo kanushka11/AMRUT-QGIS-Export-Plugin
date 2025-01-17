@@ -7,7 +7,7 @@ from . import qc_visualization_dialog as qc
 import zipfile
 import json
 from . import export_ui as ui
-from qgis.core import QgsProject, QgsMapLayer, QgsRectangle
+from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsRectangle, QgsMapLayer, QgsCsException
 
 class ImportDialog(QDialog):
     def __init__(self, iface):
@@ -177,6 +177,59 @@ class ImportDialog(QDialog):
 
         return True
 
+    # def proceed_quality_check(self):
+    #     selected_layer_name = self.layer_dropdown.currentText()
+    #     if selected_layer_name == "Select any layer for Quality Check" or not selected_layer_name:
+    #         QMessageBox.warning(self, "No Layer Selected", "Please select a valid layer for quality check.")
+    #         return
+
+    #     selected_raster_layer_name = self.raster_layer_dropdown.currentText()
+    #     if selected_raster_layer_name != "Select a Raster Layer":
+    #         raster_layer = next(
+    #             (layer for layer in QgsProject.instance().mapLayers().values()
+    #             if layer.name() == selected_raster_layer_name and layer.type() == QgsMapLayer.RasterLayer),
+    #             None
+    #         )
+    #         if not raster_layer:
+    #             QMessageBox.warning(self, "Invalid Raster Layer", "The selected raster layer could not be found.")
+    #             return
+
+    #         # Get raster extent and CRS
+    #         raster_extent = raster_layer.extent()
+    #         raster_crs = raster_layer.crs()
+
+    #         # Create the grid extent in its original CRS (EPSG:4326)
+    #         grid_extent = QgsRectangle(self.metadata_bounds['west'], self.metadata_bounds['south'],
+    #                                 self.metadata_bounds['east'], self.metadata_bounds['north'])
+
+    #         # Transform the grid extent to the raster CRS (EPSG:32644)
+    #         grid_crs = QgsCoordinateReferenceSystem("EPSG:4326")
+    #         transform = QgsCoordinateTransform(grid_crs, raster_crs, QgsProject.instance())
+    #         try:
+    #             transformed_grid_extent = transform.transform(grid_extent)
+    #         except QgsCsException as e:
+    #             QMessageBox.critical(self, "CRS Transformation Error", f"Failed to transform the grid extent: {e}")
+    #             return
+
+    #         # Compare the transformed grid extent with the raster extent
+    #         if not raster_extent.contains(transformed_grid_extent):
+    #             QMessageBox.warning(self, "Extent Validation Failed",
+    #                                 "The grid's extent does not fall within the raster layer's extent.")
+    #             return
+
+    #     # Close the current dialog
+    #     self.accept()
+
+    #     # Open the new dialog, passing the AMRUT file path
+    #     qualityCheckVisualizationDialog = qc.QualityCheckVisualizationDialog(
+    #         self,
+    #         selected_layer_name=selected_layer_name,
+    #         amrut_file_path=self.file_input.text(),
+    #         selected_raster_layer_name=selected_raster_layer_name,
+    #         grid_extent=grid_extent 
+    #     )
+
+    #     qualityCheckVisualizationDialog.exec_()
 
     def proceed_quality_check(self):
         selected_layer_name = self.layer_dropdown.currentText()
@@ -191,17 +244,48 @@ class ImportDialog(QDialog):
                 if layer.name() == selected_raster_layer_name and layer.type() == QgsMapLayer.RasterLayer),
                 None
             )
+            
+            # Get raster extent in its original CRS (EPSG:32644)
             extent = raster_layer.extent()
             raster_bounds = {
-                "north": extent.yMaximum(), "south": extent.yMinimum(),
-                "east": extent.xMaximum(), "west": extent.xMinimum()
+                "north": extent.yMaximum(),
+                "south": extent.yMinimum(),
+                "east": extent.xMaximum(),
+                "west": extent.xMinimum()
             }
-            if not all(raster_bounds[key] >= self.metadata_bounds[key] for key in ["north", "east"]) or \
-            not all(raster_bounds[key] >= self.metadata_bounds[key] for key in ["south", "west"]):
+            
+            # Prepare to transform raster bounds from EPSG:32644 to EPSG:4326
+            raster_crs = QgsCoordinateReferenceSystem("EPSG:32644")
+            wgs84 = QgsCoordinateReferenceSystem("EPSG:4326")
+            
+            # Initialize coordinate transform for raster to WGS 84
+            coord_transform_raster_to_wgs84 = QgsCoordinateTransform(raster_crs, wgs84, QgsProject.instance())
+            
+            # Transform raster bounds to WGS 84
+            transformed_northwest = coord_transform_raster_to_wgs84.transform(raster_bounds["west"], raster_bounds["north"])
+            transformed_southeast = coord_transform_raster_to_wgs84.transform(raster_bounds["east"], raster_bounds["south"])
+
+            # Create a new rectangle in WGS 84 for the transformed raster extent
+            transformed_raster_extent = QgsRectangle(transformed_northwest.x(), transformed_southeast.y(),
+                                                    transformed_southeast.x(), transformed_northwest.y())
+
+            # Create a rectangle for the vector metadata bounds (in EPSG:4326)
+            grid_extent = QgsRectangle(
+                self.metadata_bounds['west'],
+                self.metadata_bounds['south'],
+                self.metadata_bounds['east'],
+                self.metadata_bounds['north']
+            )
+
+            print(grid_extent)
+            print(transformed_raster_extent)
+
+            # Check if the transformed raster bounds cover the vector bounds
+            if not (transformed_raster_extent.contains(grid_extent)):
                 QMessageBox.warning(self, "Extent Validation Failed",
-                                    "The selected raster layer's extent does not cover the metadata extent.")
+                                    "The grid's extent does not fall within the raster layer's extent.")
                 return
-        grid_extent = QgsRectangle(self.metadata_bounds['west'], self.metadata_bounds['south'], self.metadata_bounds['east'], self.metadata_bounds['north'])
+
         # Close the current dialog
         self.accept()
 
@@ -210,8 +294,8 @@ class ImportDialog(QDialog):
             self,
             selected_layer_name=selected_layer_name,
             amrut_file_path=self.file_input.text(),
-            selected_raster_layer_name = selected_raster_layer_name,
-            grid_extent = grid_extent 
+            selected_raster_layer_name=selected_raster_layer_name,
+            grid_extent=grid_extent  
         )
 
         qualityCheckVisualizationDialog.exec_()
