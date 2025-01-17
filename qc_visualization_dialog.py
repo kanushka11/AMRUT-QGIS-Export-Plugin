@@ -1,8 +1,8 @@
 from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel
-from PyQt5.QtCore import Qt
-from qgis.core import QgsProject, QgsVectorLayer
+from PyQt5.QtCore import Qt, QTimer  
+from qgis.core import QgsProject, QgsVectorLayer, QgsCoordinateTransform, QgsCoordinateReferenceSystem
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
-
+from . import new_feature_choice
 import zipfile
 import tempfile
 import os
@@ -36,6 +36,14 @@ class QualityCheckVisualizationDialog(QDialog):
         # Right panel: Visualization of GeoJSON from AMRUT file
         right_panel = self.create_geojson_visualization_panel(raster_layer)
         layout.addLayout(right_panel)
+
+        QTimer.singleShot(1000, self.show_new_feature_dialog)  # Delay in ms before triggering check
+
+    def show_new_feature_dialog(self):
+        """Show dialog box after both layers are visualized."""
+        # Initialize the feature handler for new features
+        feature_handler = new_feature_choice.NewFeatureFoundDialog(self.selected_layer_name)
+        feature_handler.check_for_new_features()
 
     def create_geojson_visualization_panel(self, raster_layer):
         """Create a panel to visualize the GeoJSON extracted from the AMRUT file."""
@@ -120,11 +128,12 @@ class QualityCheckVisualizationDialog(QDialog):
     def create_map_canvas(self, layer, raster_layer):
         """Create a map canvas to render the given layer."""
         canvas = QgsMapCanvas()
+        print(layer.crs())
         canvas.setLayers([raster_layer, layer])
         print(self.grid_extent)
         canvas.setExtent(self.grid_extent)
         canvas.setCanvasColor(Qt.white)
-        canvas.setMapTool(QgsMapToolPan(canvas))  # Enable panning
+        canvas.setMapTool(QgsMapToolPan(canvas)) 
         canvas.refresh()
         return canvas
 
