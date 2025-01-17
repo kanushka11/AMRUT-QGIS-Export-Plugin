@@ -122,7 +122,6 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
         for layer in layers:
             if layer.type() == QgsVectorLayer.VectorLayer:  # Handle vector layers
                 geometry_type = QgsWkbTypes.flatType(layer.wkbType())
-                layers_name.append(layer.name())
                 output_path = os.path.join(grid_dir, f"{layer.name()}.geojson")
                 clip_params = {
                     'INPUT': layer,
@@ -133,10 +132,13 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
                     processing.run("qgis:clip", clip_params, feedback=feedback)
                     if geometry_type == QgsWkbTypes.MultiPoint or geometry_type == QgsWkbTypes.Point:
                         clipped_layers["Point"].append(output_path)
+                        layers_name.append(f"{{{layer.name()} : Point}}")
                     elif geometry_type == QgsWkbTypes.MultiLineString or geometry_type == QgsWkbTypes.LineString:
                         clipped_layers["Line"].append(output_path)
+                        layers_name.append(f"{{{layer.name()} : Line}}")
                     elif geometry_type == QgsWkbTypes.MultiPolygon or geometry_type == QgsWkbTypes.Polygon:
                         clipped_layers["Polygon"].append(output_path)
+                        layers_name.append(f"{{{layer.name()} : Polygon}}")
                 except Exception as e:
                     QMessageBox.warning(None, "Error", f"Error clipping vector layer '{layer.name()}' with grid cell {grid_cell_id}: {e}")
         
