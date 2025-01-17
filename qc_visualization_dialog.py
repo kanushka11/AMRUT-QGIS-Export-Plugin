@@ -8,11 +8,12 @@ import tempfile
 import os
 
 class QualityCheckVisualizationDialog(QDialog):
-    def __init__(self, parent, selected_layer_name, amrut_file_path):
+    def __init__(self, parent, selected_layer_name, amrut_file_path, selected_raster_layer_name, grid_extent):
         super().__init__(parent)
         self.selected_layer_name = selected_layer_name
         self.amrut_file_path = amrut_file_path  # AMRUT file path for GeoJSON extraction
-
+        self.selected_raster_layer_name = selected_raster_layer_name
+        self.grid_extent = grid_extent
         self.setWindowTitle("Quality Check Visualization")
         self.setWindowState(Qt.WindowMaximized)
 
@@ -21,9 +22,10 @@ class QualityCheckVisualizationDialog(QDialog):
 
         # Left panel: Visualization of selected project layer
         layer = self.get_layer_by_name(self.selected_layer_name)
+        raster_layer = self.get_layer_by_name(self.selected_raster_layer_name)
 
         if layer:
-            left_panel = self.create_layer_visualization_panel(layer, "Selected Layer Visualization")
+            left_panel = self.create_layer_visualization_panel(layer, "Selected Layer Visualization", raster_layer)
         else:
             left_panel = self.create_error_panel(f"Layer '{self.selected_layer_name}' not found.")
         layout.addLayout(left_panel)
@@ -32,10 +34,10 @@ class QualityCheckVisualizationDialog(QDialog):
         self.add_vertical_divider(layout)
 
         # Right panel: Visualization of GeoJSON from AMRUT file
-        right_panel = self.create_geojson_visualization_panel()
+        right_panel = self.create_geojson_visualization_panel(raster_layer)
         layout.addLayout(right_panel)
 
-    def create_geojson_visualization_panel(self):
+    def create_geojson_visualization_panel(self, raster_layer):
         """Create a panel to visualize the GeoJSON extracted from the AMRUT file."""
         panel_layout = QVBoxLayout()
 
@@ -56,7 +58,7 @@ class QualityCheckVisualizationDialog(QDialog):
             QgsProject.instance().addMapLayer(geojson_layer)
 
             # Create and return the visualization panel
-            panel_layout = self.create_layer_visualization_panel(geojson_layer, f"Visualization of {temporary_layer_name}")
+            panel_layout = self.create_layer_visualization_panel(geojson_layer, f"Visualization of {temporary_layer_name}", raster_layer)
             return panel_layout
         else:
             # If GeoJSON layer is not found, show an error message
@@ -103,10 +105,10 @@ class QualityCheckVisualizationDialog(QDialog):
                 return layer
         return None
 
-    def create_layer_visualization_panel(self, layer, title):
+    def create_layer_visualization_panel(self, layer, title, raster_layer):
         """Create a panel to visualize a specific project layer."""
         panel_layout = QVBoxLayout()
-        map_canvas = self.create_map_canvas(layer)
+        map_canvas = self.create_map_canvas(layer, raster_layer)
         panel_layout.addWidget(map_canvas)
 
         label = QLabel(title)
@@ -115,11 +117,12 @@ class QualityCheckVisualizationDialog(QDialog):
 
         return panel_layout
 
-    def create_map_canvas(self, layer):
+    def create_map_canvas(self, layer, raster_layer):
         """Create a map canvas to render the given layer."""
         canvas = QgsMapCanvas()
-        canvas.setLayers([layer])
-        canvas.setExtent(layer.extent())
+        canvas.setLayers([raster_layer, layer])
+        print(self.grid_extent)
+        canvas.setExtent(self.grid_extent)
         canvas.setCanvasColor(Qt.white)
         canvas.setMapTool(QgsMapToolPan(canvas))  # Enable panning
         canvas.refresh()

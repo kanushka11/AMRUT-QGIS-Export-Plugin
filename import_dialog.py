@@ -7,7 +7,7 @@ from . import qc_visualization_dialog as qc
 import zipfile
 import json
 from . import export_ui as ui
-from qgis.core import QgsProject, QgsMapLayer
+from qgis.core import QgsProject, QgsMapLayer, QgsRectangle
 
 class ImportDialog(QDialog):
     def __init__(self, iface):
@@ -201,7 +201,7 @@ class ImportDialog(QDialog):
                 QMessageBox.warning(self, "Extent Validation Failed",
                                     "The selected raster layer's extent does not cover the metadata extent.")
                 return
-
+        grid_extent = QgsRectangle(self.metadata_bounds['west'], self.metadata_bounds['south'], self.metadata_bounds['east'], self.metadata_bounds['north'])
         # Close the current dialog
         self.accept()
 
@@ -209,7 +209,9 @@ class ImportDialog(QDialog):
         qualityCheckVisualizationDialog = qc.QualityCheckVisualizationDialog(
             self,
             selected_layer_name=selected_layer_name,
-            amrut_file_path=self.file_input.text()  
+            amrut_file_path=self.file_input.text(),
+            selected_raster_layer_name = selected_raster_layer_name,
+            grid_extent = grid_extent 
         )
 
         qualityCheckVisualizationDialog.exec_()
