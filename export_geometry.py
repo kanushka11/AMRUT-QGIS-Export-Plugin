@@ -87,40 +87,6 @@ def check_polygon_in_a_layer(layer) :
     
     return valid
 
-def deep_copy_layer(original_layer):
-    """
-    Creates a deep copy of the selected layer.
-    
-    :param original_layer: QgsVectorLayer to be copied.
-    :return: QgsVectorLayer - A new layer containing a copy of the original layer.
-    """
-    if not original_layer.isValid():
-        raise ValueError("Invalid layer provided for deep copy.")
-
-    # Get the geometry type and CRS of the original layer
-    geometry_type = QgsWkbTypes.displayString(original_layer.wkbType())
-    crs = original_layer.crs().authid()  # Get CRS in 'EPSG:XXXX' format
-
-    # Create a new in-memory layer with the same geometry type and CRS
-    new_layer = QgsVectorLayer(f"{geometry_type}?crs={crs}", f"Copy of {original_layer.name()}", "memory")
-    provider = new_layer.dataProvider()
-
-    # Copy the attribute fields from the original layer
-    fields = original_layer.fields()
-    provider.addAttributes(fields)
-    new_layer.updateFields()
-
-    # Copy all features from the original layer
-    features = original_layer.getFeatures()
-    copied_features = []
-    for feature in features:
-        new_feature = QgsFeature(feature)  # Deep copy of the feature
-        copied_features.append(new_feature)
-    provider.addFeatures(copied_features)
-    new_layer.updateExtents()
-
-    return new_layer
-
 def validate_layer(layer):
     """
     Validate a QgsVectorLayer and return any issues found.
