@@ -12,8 +12,8 @@ email=amrut@iirs.gov.in
 
 about= Implemented for Export data to Mobile App for  Attribute collection under AMRUT 2.0
 
-tracker=https://git.iirs.gov.in/amrut/amrut_qgis_export_plugin/-/issues
-repository=https://git.iirs.gov.in/amrut/amrut_qgis_export_plugin/
+tracker=https://gitlab.com/iirs-amrut/amrut-qgis-plugin/-/issues
+repository=https://gitlab.com/iirs-amrut/amrut-qgis-plugin/
 # End of mandatory metadata
 
 # Recommended items:
