@@ -33,7 +33,7 @@ class QualityCheckVisualizationDialog(QDialog):
         raster_layer = self.get_layer_by_name(self.selected_raster_layer_name)
 
         if layer:
-            left_panel, self.left_map_canvas = self.create_layer_visualization_panel(layer, "Selected Layer Visualization", raster_layer)
+            left_panel, self.left_map_canvas = self.create_layer_visualization_panel(layer, f"{self.selected_layer_name} from Project", raster_layer)
         else:
             left_panel = self.create_error_panel(f"Layer '{self.selected_layer_name}' not found.")
         layout.addLayout(left_panel)
@@ -91,7 +91,7 @@ class QualityCheckVisualizationDialog(QDialog):
             QgsProject.instance().addMapLayer(geojson_layer)
 
             # Create and return the visualization panel
-            panel_layout, map_canvas = self.create_layer_visualization_panel(geojson_layer, f"Visualization of {temporary_layer_name}", raster_layer)
+            panel_layout, map_canvas = self.create_layer_visualization_panel(geojson_layer, f"{self.selected_layer_name} from AMRUT File", raster_layer)
             return panel_layout, map_canvas
         else:
             panel_layout.addWidget(QLabel("GeoJSON layer not found in AMRUT file."))
@@ -139,11 +139,17 @@ class QualityCheckVisualizationDialog(QDialog):
     def create_layer_visualization_panel(self, layer, title, raster_layer):
         """Create a panel to visualize a specific project layer."""
         panel_layout = QVBoxLayout()
-        map_canvas = self.create_map_canvas(layer, raster_layer)
-        panel_layout.addWidget(map_canvas)
+        
+        # Create the label with larger and bold text
         label = QLabel(title)
         label.setAlignment(Qt.AlignCenter)
-        panel_layout.addWidget(label)       
+        label.setStyleSheet("font-size: 16px; font-weight: bold;")  # Set font size and bold style
+        
+        panel_layout.addWidget(label)
+        
+        # Create the map canvas and add it to the panel
+        map_canvas = self.create_map_canvas(layer, raster_layer)
+        panel_layout.addWidget(map_canvas)
 
         return panel_layout, map_canvas
 
@@ -233,6 +239,10 @@ class QualityCheckVisualizationDialog(QDialog):
             # Set extent and background color for canvas
             canvas.setExtent(self.grid_extent)
             canvas.setCanvasColor(QColor("white"))
+
+            # Enable map interactions (zoom and pan)
+            canvas.setMouseTracking(True)  # Enable mouse tracking for panning and zooming
+            # canvas.setMapUnits(layer.crs().mapUnits())  # Set map units
 
             canvas.refresh()  # Refresh the canvas to ensure proper visualization
 
