@@ -3,7 +3,7 @@ pages:
   stage: deploy
   script:
     - mkdir public
-    - cp README.txt public/index.html
+    - cp index.html public/index.html
   artifacts:
     paths:
       - public

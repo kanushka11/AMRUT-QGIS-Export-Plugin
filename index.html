@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sankalan 2.0 Data Transfer Plugin</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        header {
+            background: #0056b3;
+            color: white;
+            padding: 1rem 0;
+            text-align: center;
+        }
+        .container {
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2, h3 {
+            color: #0056b3;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 10px 0;
+        }
+        ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        li {
+            margin: 5px 0;
+        }
+        footer {
+            text-align: center;
+            margin-top: 20px;
+            padding: 10px 0;
+            background: #0056b3;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Sankalan 2.0 Data Transfer Plugin</h1>
+</header>
+
+<div class="container">
+    <section>
+        <h2>Overview</h2>
+        <p>Sankalan 2.0 is a powerful data transfer plugin designed for seamless integration with QGIS. Developed by IIRS under ISRO, this plugin facilitates efficient data exchange and management, ensuring smooth workflows for geospatial applications. The main purpose of this plugin is to transfer data from a QGIS project to the Sankalan Mobile App to vet attributes on the ground. Target users are planning and administrative bodies under the AMRUT 2.0 Scheme of the Ministry of Urban and Housing Affairs.</p>
+    </section>
+
+    <section>
+        <h2>Features</h2>
+        <ul>
+            <li><strong>Data Transfer for Mobile App</strong>: Enables exporting of geospatial data to the Sankalan Mobile App.</li>
+            <li><strong>Layer Validation and Clipping</strong>: Includes features for validating grid layers and clipping data.</li>
+            <li><strong>Seamless Integration</strong>: Works natively within QGIS.</li>
+            <li><strong>Efficient Workflow</strong>: Ensures data integrity and consistency for AMRUT 2.0 workflows.</li>
+        </ul>
+    </section>
+
+    <section>
+        <h2>System Requirements</h2>
+        <ul>
+            <li>Minimum QGIS Version: 3.0</li>
+            <li>QGIS Core Plugin: Processing</li>
+            <li>Supported Operating Systems: Windows and Linux</li>
+        </ul>
+    </section>
+
+    <section>
+        <h2>Installation</h2>
+        <ol>
+            <li>Clone the repository from GitLab:</li>
+            <pre><code>git clone https://gitlab.com/iirs-amrut/amrut-qgis-plugin/</code></pre>
+            <li>Open QGIS.</li>
+            <li>Navigate to <strong>Plugins &gt; Manage and Install Plugins</strong>.</li>
+            <li>Install the plugin by adding the cloned directory.</li>
+        </ol>
+    </section>
+
+    <section>
+        <h2>Usage</h2>
+        <ol>
+            <li>Open the plugin from the <strong>Plugins</strong> menu in QGIS.</li>
+            <li>Use the main menu to select "Data to Mobile."</li>
+            <li>Follow these steps:</li>
+        </ol>
+
+        <h3>Layer Selection</h3>
+        <ul>
+            <li>Select the grid or segmentation layer for clipping.</li>
+            <li>Validate the selected layer to ensure compatibility.</li>
+        </ul>
+
+        <h3>Grid Creation</h3>
+        <p>Create a grid layer if no segmentation layer is available.</p>
+
+        <h3>Clipping and Export</h3>
+        <ul>
+            <li>Specify an output directory for the exported files.</li>
+            <li>Run the clipping process. A progress bar will indicate the process, and a confirmation dialog will appear upon completion.</li>
+        </ul>
+    </section>
+
+    <section>
+        <h2>Screenshots</h2>
+        <h3>Main Menu</h3>
+        <img src="Screenshot%20from%202025-01-17%2017-17-58.png" alt="Main Menu">
+
+        <h3>Clipping and Export</h3>
+        <img src="Screenshot%20from%202025-01-17%2017-19-13.png" alt="Clipping and Export">
+
+        <h3>Layer Validation</h3>
+        <img src="Screenshot%20from%202025-01-17%2017-18-54.png" alt="Layer Validation">
+
+        <h3>Output Directory Selection</h3>
+        <img src="Screenshot%20from%202025-01-17%2017-19-04.png" alt="Output Directory Selection">
+    </section>
+
+    <section>
+        <h2>Contribution</h2>
+        <p>We welcome contributions to enhance the plugin. Please follow these steps:</p>
+        <ol>
+            <li>Fork the repository on GitLab.</li>
+            <li>Create a new branch for your feature or bug fix.</li>
+            <li>Commit your changes and push them to your fork.</li>
+            <li>Create a merge request with a detailed description.</li>
+        </ol>
+    </section>
+
+    <section>
+        <h2>License</h2>
+        <p>&copy; 2025 Indian Institute of Remote Sensing (IIRS), Indian Space Research Organisation (ISRO). All rights reserved.</p>
+        <p>For any queries, contact us through the documentation portal.</p>
+    </section>
+</div>
+
+<footer>
+    <p>Empowering geospatial innovation through advanced tools.</p>
+</footer>
+
+</body>
+</html>
