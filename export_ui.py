@@ -178,8 +178,8 @@ def createLogoLayout(label_name):
     logo2_path = os.path.join(assets_dir, logo2_name)
 
     # Debugging: Check paths
-    print(f"Logo 1 Path: {logo1_path}")
-    print(f"Logo 2 Path: {logo2_path}")
+    # print(f"Logo 1 Path: {logo1_path}")
+    # print(f"Logo 2 Path: {logo2_path}")
 
     # Check if files exist
     if not os.path.exists(logo1_path) or not os.path.exists(logo2_path):
