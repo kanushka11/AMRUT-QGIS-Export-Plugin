@@ -277,9 +277,6 @@ class ImportDialog(QDialog):
                 self.metadata_bounds['north']
             )
 
-            print(grid_extent)
-            print(transformed_raster_extent)
-
             # Check if the transformed raster bounds cover the vector bounds
             if not (transformed_raster_extent.contains(grid_extent)):
                 QMessageBox.warning(self, "Extent Validation Failed",

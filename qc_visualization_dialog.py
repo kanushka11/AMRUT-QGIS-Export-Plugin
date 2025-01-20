@@ -1,22 +1,29 @@
 from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel
 from PyQt5.QtCore import Qt
-from qgis.core import QgsProject, QgsVectorLayer, QgsCoordinateTransform, QgsRasterLayer    
-from qgis.gui import QgsMapCanvas, QgsMapToolPan
+from qgis.core import QgsProject, QgsVectorLayer, QgsCoordinateTransform, QgsRasterLayer, QgsProcessingFeedback, QgsProcessingContext
+from qgis.gui import QgsMapCanvas
+from PyQt5.QtGui import QColor
 
 import zipfile
 import tempfile
 import os
+import processing
 
 class QualityCheckVisualizationDialog(QDialog):
     def __init__(self, parent, selected_layer_name, amrut_file_path, selected_raster_layer_name, grid_extent):
         super().__init__(parent)
         self.selected_layer_name = selected_layer_name
-        self.amrut_file_path = amrut_file_path  # AMRUT file path for GeoJSON extraction
+        self.amrut_file_path = amrut_file_path
         self.selected_raster_layer_name = selected_raster_layer_name
         self.grid_extent = grid_extent
 
         self.setWindowTitle("Quality Check Visualization")
         self.setWindowState(Qt.WindowMaximized)
+
+        # Attributes for map canvases
+        self.left_map_canvas = None
+        self.right_map_canvas = None
+        self.synchronizing = False  # Prevent infinite synchronization loops
 
         # Main layout
         layout = QHBoxLayout(self)
@@ -26,7 +33,7 @@ class QualityCheckVisualizationDialog(QDialog):
         raster_layer = self.get_layer_by_name(self.selected_raster_layer_name)
 
         if layer:
-            left_panel = self.create_layer_visualization_panel(layer, "Selected Layer Visualization", raster_layer)
+            left_panel, self.left_map_canvas = self.create_layer_visualization_panel(layer, "Selected Layer Visualization", raster_layer)
         else:
             left_panel = self.create_error_panel(f"Layer '{self.selected_layer_name}' not found.")
         layout.addLayout(left_panel)
@@ -36,10 +43,35 @@ class QualityCheckVisualizationDialog(QDialog):
 
         # Right panel: Visualization of GeoJSON from AMRUT file
         if raster_layer:
-            right_panel = self.create_geojson_visualization_panel(raster_layer)
+            right_panel, self.right_map_canvas = self.create_geojson_visualization_panel(raster_layer)
         else:
-            right_panel = self.create_error_panel(f"Layer '{self.selected_raster_layer_name}' not found.")        
+            right_panel = self.create_error_panel(f"Layer '{self.selected_raster_layer_name}' not found.")
         layout.addLayout(right_panel)
+
+        # Synchronize extents between left and right map canvases
+        self.setup_canvas_synchronization()
+
+    def setup_canvas_synchronization(self):
+        """Synchronize extents between the left and right map canvases."""
+        if self.left_map_canvas and self.right_map_canvas:
+            self.left_map_canvas.extentsChanged.connect(self.sync_extents_to_right)
+            self.right_map_canvas.extentsChanged.connect(self.sync_extents_to_left)
+
+    def sync_extents_to_right(self):
+        """Sync the extent of the left canvas to the right canvas."""
+        if not self.synchronizing:  # Prevent infinite loops
+            self.synchronizing = True
+            self.right_map_canvas.setExtent(self.left_map_canvas.extent())
+            self.right_map_canvas.refresh()
+            self.synchronizing = False
+
+    def sync_extents_to_left(self):
+        """Sync the extent of the right canvas to the left canvas."""
+        if not self.synchronizing:  # Prevent infinite loops
+            self.synchronizing = True
+            self.left_map_canvas.setExtent(self.right_map_canvas.extent())
+            self.left_map_canvas.refresh()
+            self.synchronizing = False
 
     def create_geojson_visualization_panel(self, raster_layer):
         """Create a panel to visualize the GeoJSON extracted from the AMRUT file."""
@@ -49,26 +81,21 @@ class QualityCheckVisualizationDialog(QDialog):
         geojson_layer = self.load_geojson_from_amrut(self.amrut_file_path, self.selected_layer_name)
 
         if geojson_layer:
-            # Check if a layer with the prefix 'Temporary_' already exists in the project
             temporary_layer_name = f"Temporary_{self.selected_layer_name}"
             existing_layer = self.get_layer_by_name(temporary_layer_name)
 
             if existing_layer:
-                # If a temporary layer with the same name exists, remove it
                 QgsProject.instance().removeMapLayer(existing_layer.id())
 
-            # Rename and add the GeoJSON layer with the prefix 'Temporary_'
             geojson_layer.setName(temporary_layer_name)
             QgsProject.instance().addMapLayer(geojson_layer)
 
             # Create and return the visualization panel
-            panel_layout = self.create_layer_visualization_panel(geojson_layer, f"Visualization of {temporary_layer_name}", raster_layer)
-            return panel_layout
+            panel_layout, map_canvas = self.create_layer_visualization_panel(geojson_layer, f"Visualization of {temporary_layer_name}", raster_layer)
+            return panel_layout, map_canvas
         else:
-            # If GeoJSON layer is not found, show an error message
             panel_layout.addWidget(QLabel("GeoJSON layer not found in AMRUT file."))
-
-        return panel_layout
+            return panel_layout, None
 
     def load_geojson_from_amrut(self, amrut_file_path, layer_name):
         """Extract and load the GeoJSON file from the AMRUT archive."""
@@ -116,79 +143,104 @@ class QualityCheckVisualizationDialog(QDialog):
         panel_layout.addWidget(map_canvas)
         label = QLabel(title)
         label.setAlignment(Qt.AlignCenter)
-        panel_layout.addWidget(label)
+        panel_layout.addWidget(label)       
 
-        return panel_layout
+        return panel_layout, map_canvas
 
     def create_map_canvas(self, layer, raster_layer):
         """Create a map canvas to render the given layer."""
-        canvas = QgsMapCanvas()
-
-        # Get the CRS of the grid layer (vector) and raster layer
-        grid_crs = layer.crs()
-        raster_crs = raster_layer.crs()
-
         try:
-            # Transform grid extent to the raster's CRS if necessary
-            if raster_crs != grid_crs:
-                transform = QgsCoordinateTransform(grid_crs, raster_crs, QgsProject.instance())
-                transformed_extent = transform.transformBoundingBox(self.grid_extent)
+            # Check if a clipped and reprojected raster already exists
+            existing_layer = None
+            for lyr in QgsProject.instance().mapLayers().values():
+                if lyr.name() == f"Temporary_{raster_layer.name()}" and isinstance(lyr, QgsRasterLayer):
+                    existing_layer = lyr
+                    break
+
+            # If the layer exists, reuse it; otherwise, create it
+            if existing_layer:
+                reprojected_raster_layer = existing_layer
             else:
-                transformed_extent = self.grid_extent
+                # Get the CRS of the grid layer (vector) and raster layer
+                grid_crs = layer.crs()
+                raster_crs = raster_layer.crs()
 
-            # Debugging: Log the transformed extent
-            print(f"Transformed Extent: {transformed_extent.toString()}")
+                # Transform grid extent to the raster's CRS
+                if grid_crs != raster_crs:
+                    transform = QgsCoordinateTransform(grid_crs, raster_crs, QgsProject.instance().transformContext())
+                    transformed_extent = transform.transformBoundingBox(self.grid_extent)
+                else:
+                    transformed_extent = self.grid_extent
+                    
+                # Set up the processing context
+                processing_context = QgsProcessingContext()
+                feedback = QgsProcessingFeedback()
 
-            # Create a clipped and reprojected raster layer
-            grid_crs_authid = grid_crs.authid()  # EPSG code of the grid layer
-            reprojected_raster_uri = (
-                f"warped:?source={raster_layer.source()}&crs={grid_crs_authid}"
-                f"&extent={transformed_extent.xMinimum()},{transformed_extent.yMinimum()},"
-                f"{transformed_extent.xMaximum()},{transformed_extent.yMaximum()}"
-            )
+                # Parameters for clipping the raster
+                params = {
+                    'INPUT': raster_layer.source(),
+                    'PROJWIN': f"{transformed_extent.xMinimum()},{transformed_extent.xMaximum()},"
+                            f"{transformed_extent.yMaximum()},{transformed_extent.yMinimum()}",
+                    'NODATA': -9999,
+                    'OPTIONS': '',
+                    'DATA_TYPE': 0,  # Keep original data type
+                    'OUTPUT': 'TEMPORARY_OUTPUT'  # Use TEMPORARY_OUTPUT for processing algorithms
+                }
 
-            # Debugging: Log the URI
-            print(f"Reprojected Raster URI: {reprojected_raster_uri}")
+                # Run the processing algorithm
+                clipped_result = processing.run("gdal:cliprasterbyextent", params, context=processing_context, feedback=feedback)
 
-            clipped_raster_layer = QgsRasterLayer(reprojected_raster_uri, f"{raster_layer.name()} (Clipped)", "gdal")
+                # Get the clipped raster layer from the result
+                clipped_raster_layer = QgsRasterLayer(clipped_result['OUTPUT'], f"{raster_layer.name()} (Clipped)")
 
-            # Validate the clipped raster layer
-            if not clipped_raster_layer.isValid():
-                raise ValueError("Failed to clip and reproject the raster layer.")
+                # Validate the clipped raster layer
+                if not clipped_raster_layer.isValid():
+                    raise ValueError("Failed to clip the raster layer in memory.")
 
-            # Set layers and extent on the map canvas
-            canvas.setLayers([clipped_raster_layer, layer])
+                # Reproject the clipped raster to the grid CRS
+                reproject_params = {
+                    'INPUT': clipped_raster_layer.source(),
+                    'SOURCE_CRS': raster_crs.authid(),  # Source CRS (from the clipped raster)
+                    'TARGET_CRS': grid_crs.authid(),    # Target CRS (grid layer CRS)
+                    'RESAMPLING': 0,                    # Nearest neighbor resampling
+                    'NODATA': -9999,                    # Specify NoData value if needed
+                    'TARGET_RESOLUTION': None,          # Use default resolution
+                    'OPTIONS': '',
+                    'DATA_TYPE': 0,                     # Keep original data type
+                    'TARGET_EXTENT': None,              # Use default extent
+                    'TARGET_EXTENT_CRS': None,          # Use default CRS for extent
+                    'MULTITHREADING': False,
+                    'OUTPUT': 'TEMPORARY_OUTPUT'        # Output as a temporary layer
+                }
+
+                # Run the reprojection algorithm
+                reprojected_result = processing.run("gdal:warpreproject", reproject_params, context=processing_context, feedback=feedback)
+
+                # Get the reprojected raster layer from the result
+                reprojected_raster_layer = QgsRasterLayer(reprojected_result['OUTPUT'], f"Temporary_{raster_layer.name()}")
+
+                # Validate the reprojected raster layer
+                if not reprojected_raster_layer.isValid():
+                    raise ValueError("Failed to reproject the raster layer.")
+
+                # Add the reprojected raster layer to the project
+                QgsProject.instance().addMapLayer(reprojected_raster_layer)
+
+            # Set up the map canvas with layers
+            canvas = QgsMapCanvas()
+            canvas.setLayers([layer, reprojected_raster_layer])
+
+            # Set extent and background color for canvas
             canvas.setExtent(self.grid_extent)
-            canvas.setCanvasColor(Qt.white)
-            canvas.setMapTool(QgsMapToolPan(canvas))  # Enable panning
-            canvas.refresh()
+            canvas.setCanvasColor(QColor("white"))
+
+            canvas.refresh()  # Refresh the canvas to ensure proper visualization
 
             return canvas
 
         except Exception as e:
             print(f"Error: {str(e)}")
-            raise ValueError("Failed to clip and reproject the raster layer.")
-
-    def create_error_panel(self, message):
-        """Create a panel to display an error message."""
-        panel_layout = QVBoxLayout()
-        error_label = QLabel(message)
-        error_label.setAlignment(Qt.AlignCenter)
-        panel_layout.addWidget(error_label)
-        return panel_layout
-
-    def create_placeholder_panel(self, title, message):
-        """Create a placeholder panel with a title and message."""
-        panel_layout = QVBoxLayout()
-        label = QLabel(title)
-        label.setAlignment(Qt.AlignCenter)
-        panel_layout.addWidget(label)
-
-        placeholder = QLabel(message)
-        placeholder.setAlignment(Qt.AlignCenter)
-        panel_layout.addWidget(placeholder)
-
-        return panel_layout
+            return None
 
     def add_vertical_divider(self, layout):
         """Add a vertical divider to the layout."""
