@@ -1,9 +1,10 @@
-from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel
+from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QApplication
 from PyQt5.QtCore import Qt, QTimer
 from qgis.core import QgsProject, QgsVectorLayer, QgsCoordinateTransform, QgsRasterLayer, QgsProcessingFeedback, QgsProcessingContext
 from qgis.gui import QgsMapCanvas
 from PyQt5.QtGui import QColor
 from . import new_feature_choice
+from . import verification_dialog 
 
 import zipfile
 import tempfile
@@ -54,10 +55,15 @@ class QualityCheckVisualizationDialog(QDialog):
         QTimer.singleShot(1000, self.show_new_feature_dialog)  # Delay in ms before triggering check
 
     def show_new_feature_dialog(self):
-        """Show dialog box after both layers are visualized."""
-        # Initialize the feature handler for new features
-        feature_handler = new_feature_choice.NewFeatureFoundDialog(self.selected_layer_name)
-        feature_handler.check_for_new_features()
+        grid = self.get_layer_by_name("Grid")
+        newFeatureFound = verification_dialog.IntroDialog(
+            self,
+            selected_layer_name=self.selected_layer_name,
+            selected_raster_layer_name=self.selected_raster_layer_name,
+            grid_extent=grid.extent()
+        )
+
+        newFeatureFound.exec_()
 
     def setup_canvas_synchronization(self):
         """Synchronize extents between the left and right map canvases."""

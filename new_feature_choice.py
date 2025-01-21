@@ -53,6 +53,7 @@ class NewFeatureFoundDialog:
 
     def show_verification_dialog(self, parent_dialog):
         """Show the feature verification dialog."""
+        dialog.close()
         parent_dialog.close()
 
         dialog = QDialog(None)
