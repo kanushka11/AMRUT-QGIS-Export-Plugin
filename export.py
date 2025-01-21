@@ -4,8 +4,7 @@ from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QProgressDial
 from . import main_dialog
 from qgis.core import QgsApplication,  QgsMessageLog, Qgis,   QgsProject,  QgsVectorLayer, QgsRasterLayer
 from . import open_dialog
-from . import open_dialog
-
+from . import import_dialog
 
 import processing
 import os
@@ -120,31 +119,7 @@ class AMRUT:
         if not self.is_project_saved():
             self.show_error("Please save the QGIS project before proceeding.")
             return
-        try:
-            # Step 1: Ask if the user wants to use the plugin
-            pluginUsageDialog = open_dialog.OpenPluginDialog(self.iface)
-            
-            if pluginUsageDialog.exec_() == QDialog.Accepted:
-                action = pluginUsageDialog.get_action()  # Get the selected action
-                
-                if action == 'export':
-                    self.handle_export()
-                elif action == 'import':
-                    self.handle_import()
-                else:
-                    return
 
-        except Exception as e:
-            self.show_error(f"An error occurred: {str(e)}")
-
-    def handle_export(self):
-        if not self.is_project_saved():
-            self.show_error("Please save the QGIS project before proceeding.")
-            return
-
-        if self.is_any_layer_in_editing_mode():
-            self.show_error("Please ensure no layers are in editing mode before proceeding.")
-            return
         if self.is_any_layer_in_editing_mode():
             self.show_error("Please ensure no layers are in editing mode before proceeding.")
             return
@@ -166,8 +141,25 @@ class AMRUT:
 
 
     def handle_import(self):
-        # Logic for handling import functionality goes here
-        return    
+        # Check if there is a valid project loaded
+        project = QgsProject.instance()
+        
+        if not project.isDirty() and project.fileName() == '':
+            self.show_error("No project is currently loaded. Please load a project first.")
+            return
+        
+        if not self.is_project_saved():
+            self.show_error("Please save the QGIS project before proceeding.")
+            return
+
+        if self.is_any_layer_in_editing_mode():
+            self.show_error("Please ensure no layers are in editing mode before proceeding.")
+            return
+
+        # Create and show the Import_Dialog
+        importDialog = import_dialog.ImportDialog(self.iface)  # Pass the parent if necessary
+        importDialog.reconstruct_or_qc_dialog()
+
 
     def is_algorithm_available(self, algorithm_id):
         """Check if a processing algorithm is available."""
