@@ -25,7 +25,7 @@ hasProcessingProvider=no
 # Tags are comma separated with spaces allowed
 tags=python
 
-homepage=https://amrut-qgis-plugin-899fcf.gitlab.io/
+homepage=https://amrut-qgis-plugin-899fcf.gitlab.io
 category=Plugins
 icon=icon.png
 # experimental flag
