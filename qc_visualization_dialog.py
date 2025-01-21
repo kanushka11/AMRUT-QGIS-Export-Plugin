@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel
+from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QMessageBox
 from PyQt5.QtCore import Qt
 from qgis.core import QgsProject, QgsVectorLayer, QgsCoordinateTransform, QgsRasterLayer, QgsProcessingFeedback, QgsProcessingContext
 from qgis.gui import QgsMapCanvas
@@ -17,7 +17,7 @@ class QualityCheckVisualizationDialog(QDialog):
         self.selected_raster_layer_name = selected_raster_layer_name
         self.grid_extent = grid_extent
 
-        self.setWindowTitle("Quality Check Visualization")
+        self.setWindowTitle("AMRUT 2.0")
         self.setWindowState(Qt.WindowMaximized)
 
         # Attributes for map canvases
@@ -33,7 +33,7 @@ class QualityCheckVisualizationDialog(QDialog):
         raster_layer = self.get_layer_by_name(self.selected_raster_layer_name)
 
         if layer:
-            left_panel, self.left_map_canvas = self.create_layer_visualization_panel(layer, f"{self.selected_layer_name} from Project", raster_layer)
+            left_panel, self.left_map_canvas = self.create_layer_visualization_panel(layer, f"{self.selected_layer_name} from Project", raster_layer, 0)
         else:
             left_panel = self.create_error_panel(f"Layer '{self.selected_layer_name}' not found.")
         layout.addLayout(left_panel)
@@ -43,7 +43,7 @@ class QualityCheckVisualizationDialog(QDialog):
 
         # Right panel: Visualization of GeoJSON from AMRUT file
         if raster_layer:
-            right_panel, self.right_map_canvas = self.create_geojson_visualization_panel(raster_layer)
+            right_panel, self.right_map_canvas = self.create_geojson_visualization_panel(raster_layer, 1)
         else:
             right_panel = self.create_error_panel(f"Layer '{self.selected_raster_layer_name}' not found.")
         layout.addLayout(right_panel)
@@ -73,7 +73,7 @@ class QualityCheckVisualizationDialog(QDialog):
             self.left_map_canvas.refresh()
             self.synchronizing = False
 
-    def create_geojson_visualization_panel(self, raster_layer):
+    def create_geojson_visualization_panel(self, raster_layer, called_for):
         """Create a panel to visualize the GeoJSON extracted from the AMRUT file."""
         panel_layout = QVBoxLayout()
 
@@ -91,7 +91,7 @@ class QualityCheckVisualizationDialog(QDialog):
             QgsProject.instance().addMapLayer(geojson_layer)
 
             # Create and return the visualization panel
-            panel_layout, map_canvas = self.create_layer_visualization_panel(geojson_layer, f"{self.selected_layer_name} from AMRUT File", raster_layer)
+            panel_layout, map_canvas = self.create_layer_visualization_panel(geojson_layer, f"{self.selected_layer_name} from AMRUT File", raster_layer, called_for)
             return panel_layout, map_canvas
         else:
             panel_layout.addWidget(QLabel("GeoJSON layer not found in AMRUT file."))
@@ -135,33 +135,46 @@ class QualityCheckVisualizationDialog(QDialog):
             if layer.name() == layer_name:
                 return layer
         return None
+    
+    def remove_layer_by_name(self, layer_name):
+        """Remove a layer from the QGIS project by its name."""
+        for layer in QgsProject.instance().mapLayers().values():
+            if layer.name() == layer_name:
+                QgsProject.instance().removeMapLayer(layer.id())
+                break
+        return None
 
-    def create_layer_visualization_panel(self, layer, title, raster_layer):
+    def create_layer_visualization_panel(self, layer, title, raster_layer, called_for):
         """Create a panel to visualize a specific project layer."""
         panel_layout = QVBoxLayout()
         
         # Create the label with larger and bold text
         label = QLabel(title)
         label.setAlignment(Qt.AlignCenter)
-        label.setStyleSheet("font-size: 16px; font-weight: bold;")  # Set font size and bold style
+        label.setStyleSheet("font-size: 12px; font-weight: bold;")  # Set font size and bold style
         
         panel_layout.addWidget(label)
         
         # Create the map canvas and add it to the panel
-        map_canvas = self.create_map_canvas(layer, raster_layer)
+        map_canvas = self.create_map_canvas(layer, raster_layer, called_for)
         panel_layout.addWidget(map_canvas)
 
         return panel_layout, map_canvas
 
-    def create_map_canvas(self, layer, raster_layer):
+    def create_map_canvas(self, layer, raster_layer, called_for):
         """Create a map canvas to render the given layer."""
         try:
-            # Check if a clipped and reprojected raster already exists
             existing_layer = None
-            for lyr in QgsProject.instance().mapLayers().values():
-                if lyr.name() == f"Temporary_{raster_layer.name()}" and isinstance(lyr, QgsRasterLayer):
-                    existing_layer = lyr
-                    break
+
+            if(called_for == 0):
+                # Remove if a clipped and reprojected raster already exists
+                self.remove_layer_by_name(f"Temporary_{raster_layer.name()}")
+            else:
+                # Check if a clipped and reprojected raster already exists
+                for lyr in QgsProject.instance().mapLayers().values():
+                    if lyr.name() == f"Temporary_{raster_layer.name()}" and isinstance(lyr, QgsRasterLayer):
+                        existing_layer = lyr
+                        break
 
             # If the layer exists, reuse it; otherwise, create it
             if existing_layer:
@@ -258,3 +271,20 @@ class QualityCheckVisualizationDialog(QDialog):
         line.setFixedWidth(1)
         line.setStyleSheet("background-color: black;")
         layout.addWidget(line)
+
+    def closeEvent(self, event):
+        """Override closeEvent to remove temporary layers."""
+        try:
+            # Remove the temporary layers
+            temporary_selected_layer_name = f"Temporary_{self.selected_layer_name}"
+            temporary_raster_layer_name = f"Temporary_{self.selected_raster_layer_name}"
+
+            self.remove_layer_by_name(temporary_selected_layer_name)
+            self.remove_layer_by_name(temporary_raster_layer_name)
+            
+        except Exception as e:
+            print(f"Error during cleanup: {str(e)}")
+        
+        # Call the base class implementation to ensure proper closing
+        super().closeEvent(event)
+

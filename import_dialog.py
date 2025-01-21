@@ -43,6 +43,9 @@ class ImportDialog(QDialog):
         current_dialog.accept()
         next_dialog()
 
+    def reconstruct_dialog(self):
+        pass
+
     def quality_check_dialog(self):
         qc_dialog = self._create_dialog("AMRUT 2.0", 500, 250)
         layout = QVBoxLayout(qc_dialog)
@@ -118,12 +121,19 @@ class ImportDialog(QDialog):
                     return
 
                 metadata = json.loads(zip_ref.read('metadata.json'))
-                if not self._validate_geojson_files(zip_ref, metadata):
+
+                # Extract layer names from the updated format
+                layer_names = [
+                    layer.split(" : ")[0].strip("{}").strip()
+                    for layer in metadata['layers']
+                ]
+
+                if not self._validate_geojson_files(zip_ref, layer_names):
                     return
                 
                 project_layers = [layer.name() for layer in QgsProject.instance().mapLayers().values()]
                 missing_in_project = [
-                    layer for layer in metadata['layers']
+                    layer for layer in layer_names
                     if layer not in project_layers
                 ]
                 if missing_in_project:
@@ -136,14 +146,13 @@ class ImportDialog(QDialog):
 
                 layers_qc_completed = metadata['layers_qc_completed']
                 layers_qc_pending = [
-                    layer for layer in metadata['layers']
+                    layer for layer in layer_names
                     if layer not in layers_qc_completed
                 ]
 
                 self.metadata_bounds = {key: metadata[key] for key in ["north", "south", "east", "west"]}
                 self.file_input.setText(file_path)
                 self.layer_dropdown.addItems(layers_qc_pending)
-                # QMessageBox.information(self, "Validation Successful", "All checks passed successfully!")
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
@@ -151,19 +160,14 @@ class ImportDialog(QDialog):
 
     def _validate_metadata(self, zip_ref):
         if 'metadata.json' not in zip_ref.namelist():
-            QMessageBox.warning(self, "Invalid File", "The file does not contain 'metadata.json'.")
+            QMessageBox.warning(self, "Missing Metadata File", "The .amrut file does not contain 'metadata.json' file.")
             self.file_input.clear()
             return False
         return True
 
-    def _validate_geojson_files(self, zip_ref, metadata):
-        if 'layers' not in metadata or not isinstance(metadata['layers'], list):
-            QMessageBox.warning(self, "Invalid Metadata", "'layers' array is missing or invalid in metadata.json.")
-            self.file_input.clear()
-            return False
-
+    def _validate_geojson_files(self, zip_ref, layer_names):
         missing_files = [
-            layer for layer in metadata['layers']
+            layer for layer in layer_names
             if f"{layer}.geojson" not in zip_ref.namelist()
         ]
         if missing_files:
@@ -176,60 +180,6 @@ class ImportDialog(QDialog):
             return False
 
         return True
-
-    # def proceed_quality_check(self):
-    #     selected_layer_name = self.layer_dropdown.currentText()
-    #     if selected_layer_name == "Select any layer for Quality Check" or not selected_layer_name:
-    #         QMessageBox.warning(self, "No Layer Selected", "Please select a valid layer for quality check.")
-    #         return
-
-    #     selected_raster_layer_name = self.raster_layer_dropdown.currentText()
-    #     if selected_raster_layer_name != "Select a Raster Layer":
-    #         raster_layer = next(
-    #             (layer for layer in QgsProject.instance().mapLayers().values()
-    #             if layer.name() == selected_raster_layer_name and layer.type() == QgsMapLayer.RasterLayer),
-    #             None
-    #         )
-    #         if not raster_layer:
-    #             QMessageBox.warning(self, "Invalid Raster Layer", "The selected raster layer could not be found.")
-    #             return
-
-    #         # Get raster extent and CRS
-    #         raster_extent = raster_layer.extent()
-    #         raster_crs = raster_layer.crs()
-
-    #         # Create the grid extent in its original CRS (EPSG:4326)
-    #         grid_extent = QgsRectangle(self.metadata_bounds['west'], self.metadata_bounds['south'],
-    #                                 self.metadata_bounds['east'], self.metadata_bounds['north'])
-
-    #         # Transform the grid extent to the raster CRS (EPSG:32644)
-    #         grid_crs = QgsCoordinateReferenceSystem("EPSG:4326")
-    #         transform = QgsCoordinateTransform(grid_crs, raster_crs, QgsProject.instance())
-    #         try:
-    #             transformed_grid_extent = transform.transform(grid_extent)
-    #         except QgsCsException as e:
-    #             QMessageBox.critical(self, "CRS Transformation Error", f"Failed to transform the grid extent: {e}")
-    #             return
-
-    #         # Compare the transformed grid extent with the raster extent
-    #         if not raster_extent.contains(transformed_grid_extent):
-    #             QMessageBox.warning(self, "Extent Validation Failed",
-    #                                 "The grid's extent does not fall within the raster layer's extent.")
-    #             return
-
-    #     # Close the current dialog
-    #     self.accept()
-
-    #     # Open the new dialog, passing the AMRUT file path
-    #     qualityCheckVisualizationDialog = qc.QualityCheckVisualizationDialog(
-    #         self,
-    #         selected_layer_name=selected_layer_name,
-    #         amrut_file_path=self.file_input.text(),
-    #         selected_raster_layer_name=selected_raster_layer_name,
-    #         grid_extent=grid_extent 
-    #     )
-
-    #     qualityCheckVisualizationDialog.exec_()
 
     def proceed_quality_check(self):
         selected_layer_name = self.layer_dropdown.currentText()
