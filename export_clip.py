@@ -35,7 +35,7 @@ from . import export_rename_tiles as tiles
 
 
 def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
-    """Clip all layers by grid cells with a progress dialog."""
+    """Clip all layers by grid cells -> clip, merge and archive."""
     feedback = QgsProcessingFeedback()
 
     # Create the output directory if it doesn't exist
@@ -49,6 +49,7 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
 
     feature_id_value = 1
 
+    #Clipping
     for layer in layers:
         if layer.type() == QgsVectorLayer.VectorLayer:
             layer.startEditing()
@@ -182,6 +183,7 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
                 except Exception as e:
                     QMessageBox.warning(None, "Error", f"Error clipping raster layer '{layer.name()}' with grid cell {grid_cell_id}: {e}")
 
+        #Merging Geometries
         geometry_output_files = {
             "Point": os.path.join(grid_dir, "point.geojson"),
             "Line": os.path.join(grid_dir, "line.geojson"),
@@ -206,8 +208,10 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
 
         create_metadata(grid_name=f"grid_{grid_cell_id}", grid_layer=temp_layer, grid_dir=grid_dir,
                         layers_name=layers_name, crs=grid_layer.crs())
+        #Archiving
         archive_name = os.path.join(grid_dir, f"grid_{grid_cell_id}")
         create_archive(grid_dir,archive_name)
+
         progress_signal.emit(current_step)
         del temp_layer
 
@@ -279,6 +283,12 @@ def create_html_file(layer, grid_dir, crs):
         html_file.write(html_content)
 
 def create_metadata(grid_name,grid_layer, grid_dir, layers_name, crs) :
+    """
+        Creates an JSON file that contains the information about clipped grid
+        Extent of grid
+        Layers clipped and
+        Grid cell id.
+        """
     json_file_path = os.path.join(grid_dir, "metadata.json")
     target_crs = QgsCoordinateReferenceSystem("EPSG:4326")
     transform = QgsCoordinateTransform(crs, target_crs, QgsProject.instance())
