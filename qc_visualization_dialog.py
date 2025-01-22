@@ -1,8 +1,10 @@
-from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QMessageBox
-from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QApplication, QMessageBox
+from PyQt5.QtCore import Qt, QTimer
 from qgis.core import QgsProject, QgsVectorLayer, QgsCoordinateTransform, QgsRasterLayer, QgsProcessingFeedback, QgsProcessingContext
 from qgis.gui import QgsMapCanvas
 from PyQt5.QtGui import QColor
+from . import new_feature_choice
+from . import verification_dialog 
 
 import zipfile
 import tempfile
@@ -50,6 +52,19 @@ class QualityCheckVisualizationDialog(QDialog):
 
         # Synchronize extents between left and right map canvases
         self.setup_canvas_synchronization()
+        
+        QTimer.singleShot(1000, self.show_new_feature_dialog)  # Delay in ms before triggering check
+
+    def show_new_feature_dialog(self):
+        grid = self.get_layer_by_name("Grid")
+        newFeatureFound = verification_dialog.IntroDialog(
+            self,
+            selected_layer_name=self.selected_layer_name,
+            selected_raster_layer_name=self.selected_raster_layer_name,
+            grid_extent=grid.extent()
+        )
+
+        newFeatureFound.exec_()
 
     def setup_canvas_synchronization(self):
         """Synchronize extents between the left and right map canvases."""
@@ -287,4 +302,3 @@ class QualityCheckVisualizationDialog(QDialog):
         
         # Call the base class implementation to ensure proper closing
         super().closeEvent(event)
-

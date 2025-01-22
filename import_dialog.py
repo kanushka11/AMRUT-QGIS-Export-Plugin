@@ -7,13 +7,12 @@ from . import qc_visualization_dialog as qc
 import zipfile
 import json
 from . import export_ui as ui
-from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsRectangle, QgsMapLayer, QgsCsException
+from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsRectangle, QgsMapLayer
 
 class ImportDialog(QDialog):
     def __init__(self, iface):
         super().__init__()
         self.iface = iface
-        self.setWindowTitle("Import Dialog")
 
     def reconstruct_or_qc_dialog(self):
         dialog = self._create_dialog("AMRUT 2.0", 350, 200)
@@ -121,6 +120,11 @@ class ImportDialog(QDialog):
                     return
 
                 metadata = json.loads(zip_ref.read('metadata.json'))
+
+                if 'layers' not in metadata or not isinstance(metadata['layers'], list):
+                    QMessageBox.warning(self, "Invalid Metadata", "'layers' array is missing or invalid in metadata.json.")
+                    self.file_input.clear()
+                    return False
 
                 # Extract layer names from the updated format
                 layer_names = [

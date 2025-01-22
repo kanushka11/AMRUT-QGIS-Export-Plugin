@@ -94,8 +94,6 @@ class AMRUT:
         for action in self.actions:
             self.iface.removePluginMenu(self.tr(u'&AMRUT'), action)
             self.iface.removeToolBarIcon(action)
-
-    
     
     def run(self):
         try:
@@ -114,6 +112,7 @@ class AMRUT:
 
         except Exception as e:
             self.show_error(f"An error occurred: {str(e)}")
+
 
     def handle_export(self):
         if not self.is_project_saved():
