@@ -1,26 +1,18 @@
-from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton
+from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame
 from PyQt5.QtCore import Qt
-from qgis.core import QgsProject
+from qgis.core import QgsProject, QgsRectangle
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
+from PyQt5.QtGui import QColor
 
 
-def get_layer_by_name(layer_name):
-        """Retrieve a layer from the QGIS project by its name."""
-        for layer in QgsProject.instance().mapLayers().values():
-            if layer.name() == layer_name:
-                return layer
-        return None
-
-class IntroDialog(QDialog):
-    def __init__(self, parent, selected_layer_name, selected_raster_layer_name, grid_extent):
-        super().__init__(parent)
-        self.selected_layer_name = selected_layer_name
-        self.selected_layer = get_layer_by_name(selected_layer_name)
-        self.selected_raster_layer_name =selected_raster_layer_name
-        self.temporary_layer_name = f"Temporary_{selected_layer_name}"
-        self.temporary_layer = get_layer_by_name(self.temporary_layer_name)
-        self.grid_extent = grid_extent
-
+class VerificationDialog:
+    def __init__(self, selected_layer_name, selected_raster_layer_name):
+        self.selected_layer = self.get_layer_by_name(selected_layer_name)
+        self.selected_raster_layer = self.get_layer_by_name(f"Temporary_{selected_raster_layer_name}")
+        self.temporary_layer = self.get_layer_by_name(f"Temporary_{selected_layer_name}")
+        
+    def check_for_new_features(self):
+        """Compare the feature_id attribute of both layers and prompt the user if new features are found."""
         if self.selected_layer and self.temporary_layer:
             selected_feature_ids = {f['feature_id'] for f in self.selected_layer.getFeatures()}
             self.new_feature_ids = set()
@@ -30,8 +22,7 @@ class IntroDialog(QDialog):
                 if temp_feature_id not in selected_feature_ids:
                     self.new_feature_ids.add(temp_feature_id)
 
-            if self.new_feature_ids:
-                self.show_new_features_dialog()
+            self.show_new_features_dialog()
 
     def show_new_features_dialog(self):
         """Show dialog box asking user to proceed to verify new features."""
@@ -39,14 +30,14 @@ class IntroDialog(QDialog):
         message = f"{feature_count} new features found in the temporary layer."
 
         dialog = QDialog(None)
-        dialog.setWindowTitle("Feature Verification")
+        dialog.setWindowTitle("New Features Found")
         dialog.setMinimumSize(300, 150)
 
         layout = QVBoxLayout(dialog)
         message_label = QLabel(message)
         message_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(message_label)
-        
+
         if feature_count > 0:
             button_layout = QHBoxLayout()
             proceed_button = QPushButton("Proceed to Verify")
@@ -54,101 +45,130 @@ class IntroDialog(QDialog):
             proceed_button.setFixedWidth(150)
             layout.addLayout(button_layout)
 
-            proceed_button.clicked.connect(lambda: self.proceed_to_verify(dialog))
+            proceed_button.clicked.connect(lambda: self.show_verification_dialog(dialog))
+        dialog.exec_()
+        
+    def get_layer_by_name(self, layer_name):
+        """Retrieve a layer from the QGIS project by its name."""
+        for layer in QgsProject.instance().mapLayers().values():
+            if layer.name() == layer_name:
+                return layer
+        return None
+
+    def show_verification_dialog(self, parent_dialog):
+        """Show the feature verification dialog."""
+        parent_dialog.close()
+
+        dialog = QDialog(None)
+        dialog.setWindowTitle("Verify New Features")
+        dialog.setMinimumSize(800, 600)
+
+        main_layout = QVBoxLayout(dialog)
+        canvas_layout = QHBoxLayout()
+
+        # Left canvas for selected layer
+        left_canvas_frame = self.create_canvas_frame("Selected Layer", self.selected_layer)
+        canvas_layout.addWidget(left_canvas_frame)
+
+        # Right canvas for temporary layer
+        right_canvas_frame = self.create_canvas_frame("Temporary Layer", self.temporary_layer)
+        canvas_layout.addWidget(right_canvas_frame)
+
+        main_layout.addLayout(canvas_layout)
+
+        # Add buttons for accepting or rejecting features
+        button_layout = QHBoxLayout()
+        accept_button = QPushButton("Accept New Feature")
+        reject_button = QPushButton("Reject New Feature")
+        button_layout.addWidget(accept_button)
+        button_layout.addWidget(reject_button)
+        main_layout.addLayout(button_layout)
+
+        # Initialize feature navigation
+        self.current_feature_index = 0
+        self.dialog = dialog
+        self.left_canvas = left_canvas_frame.findChild(QgsMapCanvas)
+        self.right_canvas = right_canvas_frame.findChild(QgsMapCanvas)
+
+        # Connect button actions
+        accept_button.clicked.connect(self.accept_feature)
+        reject_button.clicked.connect(self.reject_feature)
+
+        self.update_canvases()
         dialog.exec_()
 
-    def proceed_to_verify(self,dialog):
-        """Close this dialog and open the verification dialog."""
-        # Close the intro dialog
-        dialog.close()
+    def create_canvas_frame(self, label_text, layer):
+        """Create a frame with a label and map canvas."""
+        frame = QFrame()
+        frame_layout = QVBoxLayout(frame)
 
-        qualityCheckVisualizationDialog = VerificationDialog(
-            parent=self.parent(),  # Use the main window or the correct parent dialog
-            selected_layer_name=self.selected_layer_name,
-            selected_raster_layer_name=self.selected_raster_layer_name,
-            grid_extent=self.grid_extent,
-        )
-        qualityCheckVisualizationDialog.exec_()
-
-class VerificationDialog(QDialog):
-    def __init__(self, parent, selected_layer_name, selected_raster_layer_name, grid_extent):
-        super().__init__(parent)
-        self.selected_layer_name = selected_layer_name
-        self.selected_raster_layer_name =f"Temporary_{selected_raster_layer_name}" 
-        self.temporary_layer_name = f"Temporary_{self.selected_layer_name}"
-    
-        self.grid_extent = grid_extent
-        self.setWindowTitle("Quality Check Visualization")
-
-        # Main layout
-        layout = QHBoxLayout(self)
-
-        # Left panel: Visualization of selected project layer
-        layer = get_layer_by_name(self.selected_layer_name)
-        raster_layer = get_layer_by_name(self.selected_raster_layer_name)
-        amrut_layer = get_layer_by_name(self.temporary_layer_name)
-
-        if layer:
-            left_panel = self.create_layer_visualization_panel(layer, "Selected Layer Visualization", raster_layer)
-        else:
-            left_panel = self.create_error_panel(f"Layer '{self.selected_layer_name}' not found.")
-        layout.addLayout(left_panel)
-
-        # Add a vertical divider
-        self.add_vertical_divider(layout)
-
-        # Right panel: Visualization of GeoJSON from AMRUT file
-        right_panel = self.create_layer_visualization_panel(amrut_layer, "Selected Layer Visualization", raster_layer)
-        layout.addLayout(right_panel)
-
-
-    def create_layer_visualization_panel(self, layer, title, raster_layer):
-        """Create a panel to visualize a specific project layer."""
-        panel_layout = QVBoxLayout()
-        map_canvas = self.create_map_canvas(layer, raster_layer)
-        panel_layout.addWidget(map_canvas)
-
-        label = QLabel(title)
+        label = QLabel(label_text)
         label.setAlignment(Qt.AlignCenter)
-        panel_layout.addWidget(label)
+        frame_layout.addWidget(label)
 
-        return panel_layout
-
-    def create_map_canvas(self, layer, raster_layer):
-        """Create a map canvas to render the given layer."""
         canvas = QgsMapCanvas()
-        canvas.setLayers([layer, raster_layer])
-        print(self.grid_extent)
-        canvas.setExtent(self.grid_extent)
-        canvas.setCanvasColor(Qt.white)
-        canvas.setMapTool(QgsMapToolPan(canvas))  # Enable panning
-        canvas.refresh()
-        return canvas
+        canvas.setLayers([layer,self.selected_raster_layer])
+        canvas.setCanvasColor(QColor("white"))
+        canvas.setMapTool(QgsMapToolPan(canvas))
+        frame_layout.addWidget(canvas)
 
-    def create_error_panel(self, message):
-        """Create a panel to display an error message."""
-        panel_layout = QVBoxLayout()
-        error_label = QLabel(message)
-        error_label.setAlignment(Qt.AlignCenter)
-        panel_layout.addWidget(error_label)
-        return panel_layout
+        return frame
 
-    def create_placeholder_panel(self, title, message):
-        """Create a placeholder panel with a title and message."""
-        panel_layout = QVBoxLayout()
-        label = QLabel(title)
-        label.setAlignment(Qt.AlignCenter)
-        panel_layout.addWidget(label)
+    def update_canvases(self):
+        """Update canvases to focus on the current feature."""
+        if self.current_feature_index < len(self.new_feature_ids):
+            # Convert the feature_id to integer, assuming they are float in new_feature_ids
+            feature_id = int(list(self.new_feature_ids)[self.current_feature_index])
 
-        placeholder = QLabel(message)
-        placeholder.setAlignment(Qt.AlignCenter)
-        panel_layout.addWidget(placeholder)
+            # Get features
+            temp_feature = next(self.temporary_layer.getFeatures(f"feature_id = {feature_id}"), None)
 
-        return panel_layout
+            if temp_feature:
+                bbox = temp_feature.geometry().boundingBox()
+                extent = QgsRectangle(bbox.xMinimum(), bbox.yMinimum(), bbox.xMaximum(), bbox.yMaximum())
+                # Zoom to the centroid on the left canvas (Selected Layer)
+                self.zoom_to_feature_on_left_canvas(extent)
+                
+                # Zoom to the feature's bounding box on the right canvas (Temporary Layer)
+                self.zoom_to_feature_on_right_canvas(extent)
+            else:
+                print(f"Feature with feature_id {feature_id} not found in the temporary layer.")
 
-    def add_vertical_divider(self, layout):
-        """Add a vertical divider to the layout."""
-        line = QLabel()
-        line.setFixedWidth(1)
-        line.setStyleSheet("background-color: black;")
-        layout.addWidget(line)
+
+    def zoom_to_feature_on_left_canvas(self, extent):
+        """Zoom to the feature's bounding box on the temporary layer (right canvas)."""
+        self.left_canvas.setExtent(extent)
+        self.left_canvas.refresh() 
+
+    def zoom_to_feature_on_right_canvas(self, extent):
+        """Zoom to the feature's bounding box on the temporary layer (right canvas)."""
+        self.right_canvas.setExtent(extent)
+        self.right_canvas.refresh()
+
+    def accept_feature(self):
+        """Handle accepting the current feature."""
+        feature_id = list(self.new_feature_ids)[self.current_feature_index]
+        print(f"Feature {feature_id} accepted.")
+        self.move_to_next_feature()
+
+    def reject_feature(self):
+        """Handle rejecting the current feature."""
+        feature_id = list(self.new_feature_ids)[self.current_feature_index]
+        print(f"Feature {feature_id} rejected.")
+        self.move_to_next_feature()
+
+    def move_to_next_feature(self):
+        """Move to the next feature in the list."""
+        self.current_feature_index += 1
+        if self.current_feature_index < len(self.new_feature_ids):
+            self.update_canvases()
+        else:
+            print("All features reviewed.")
+            self.dialog.accept()
+
+    def get_layer_by_name(self, layer_name):
+        """Retrieve a layer from the QGIS project by its name."""
+        for layer in QgsProject.instance().mapLayers().values():
+            if layer.name() == layer_name:
+                return layer
+        return None

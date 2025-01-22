@@ -55,15 +55,8 @@ class QualityCheckVisualizationDialog(QDialog):
         QTimer.singleShot(1000, self.show_new_feature_dialog)  # Delay in ms before triggering check
 
     def show_new_feature_dialog(self):
-        grid = self.get_layer_by_name("Grid")
-        newFeatureFound = verification_dialog.IntroDialog(
-            self,
-            selected_layer_name=self.selected_layer_name,
-            selected_raster_layer_name=self.selected_raster_layer_name,
-            grid_extent=grid.extent()
-        )
-
-        newFeatureFound.exec_()
+        newFeatureFound = verification_dialog.VerificationDialog(self.selected_layer_name, self.selected_raster_layer_name)
+        newFeatureFound.check_for_new_features()
 
     def setup_canvas_synchronization(self):
         """Synchronize extents between the left and right map canvases."""
