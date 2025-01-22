@@ -7,13 +7,12 @@ from . import qc_visualization_dialog as qc
 import zipfile
 import json
 from . import export_ui as ui
-from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsRectangle, QgsMapLayer, QgsCsException
+from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsRectangle, QgsMapLayer
 
 class ImportDialog(QDialog):
     def __init__(self, iface):
         super().__init__()
         self.iface = iface
-        self.setWindowTitle("Import Dialog")
 
     def reconstruct_or_qc_dialog(self):
         dialog = self._create_dialog("AMRUT 2.0", 350, 200)
@@ -42,6 +41,9 @@ class ImportDialog(QDialog):
     def _open_dialog(self, current_dialog, next_dialog):
         current_dialog.accept()
         next_dialog()
+
+    def reconstruct_dialog(self):
+        pass
 
     def quality_check_dialog(self):
         qc_dialog = self._create_dialog("AMRUT 2.0", 500, 250)
@@ -118,12 +120,24 @@ class ImportDialog(QDialog):
                     return
 
                 metadata = json.loads(zip_ref.read('metadata.json'))
-                if not self._validate_geojson_files(zip_ref, metadata):
+
+                if 'layers' not in metadata or not isinstance(metadata['layers'], list):
+                    QMessageBox.warning(self, "Invalid Metadata", "'layers' array is missing or invalid in metadata.json.")
+                    self.file_input.clear()
+                    return False
+
+                # Extract layer names from the updated format
+                layer_names = [
+                    layer.split(" : ")[0].strip("{}").strip()
+                    for layer in metadata['layers']
+                ]
+
+                if not self._validate_geojson_files(zip_ref, layer_names):
                     return
                 
                 project_layers = [layer.name() for layer in QgsProject.instance().mapLayers().values()]
                 missing_in_project = [
-                    layer for layer in metadata['layers']
+                    layer for layer in layer_names
                     if layer not in project_layers
                 ]
                 if missing_in_project:
@@ -136,14 +150,13 @@ class ImportDialog(QDialog):
 
                 layers_qc_completed = metadata['layers_qc_completed']
                 layers_qc_pending = [
-                    layer for layer in metadata['layers']
+                    layer for layer in layer_names
                     if layer not in layers_qc_completed
                 ]
 
                 self.metadata_bounds = {key: metadata[key] for key in ["north", "south", "east", "west"]}
                 self.file_input.setText(file_path)
                 self.layer_dropdown.addItems(layers_qc_pending)
-                # QMessageBox.information(self, "Validation Successful", "All checks passed successfully!")
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
@@ -151,19 +164,14 @@ class ImportDialog(QDialog):
 
     def _validate_metadata(self, zip_ref):
         if 'metadata.json' not in zip_ref.namelist():
-            QMessageBox.warning(self, "Invalid File", "The file does not contain 'metadata.json'.")
+            QMessageBox.warning(self, "Missing Metadata File", "The .amrut file does not contain 'metadata.json' file.")
             self.file_input.clear()
             return False
         return True
 
-    def _validate_geojson_files(self, zip_ref, metadata):
-        if 'layers' not in metadata or not isinstance(metadata['layers'], list):
-            QMessageBox.warning(self, "Invalid Metadata", "'layers' array is missing or invalid in metadata.json.")
-            self.file_input.clear()
-            return False
-
+    def _validate_geojson_files(self, zip_ref, layer_names):
         missing_files = [
-            layer for layer in metadata['layers']
+            layer for layer in layer_names
             if f"{layer}.geojson" not in zip_ref.namelist()
         ]
         if missing_files:
@@ -176,7 +184,7 @@ class ImportDialog(QDialog):
             return False
 
         return True
-    
+
     def proceed_quality_check(self):
         selected_layer_name = self.layer_dropdown.currentText()
         if selected_layer_name == "Select any layer for Quality Check" or not selected_layer_name:

@@ -21,7 +21,6 @@ class VerificationDialog:
                 temp_feature_id = feature['feature_id']
                 if temp_feature_id not in selected_feature_ids:
                     self.new_feature_ids.add(temp_feature_id)
-
             self.show_new_features_dialog()
 
     def show_new_features_dialog(self):
@@ -164,7 +163,7 @@ class VerificationDialog:
             self.update_canvases()
         else:
             print("All features reviewed.")
-            self.dialog.accept()
+            self.dialog.close()
 
     def get_layer_by_name(self, layer_name):
         """Retrieve a layer from the QGIS project by its name."""
