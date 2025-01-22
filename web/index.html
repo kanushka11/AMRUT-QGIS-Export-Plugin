@@ -14,21 +14,26 @@
             color: #333;
         }
         header {
-            background: #0056b3;
-            color: white;
+            background:rgb(196, 233, 247);
             padding: 1rem 0;
             text-align: center;
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
         }
         .container {
             max-width: 900px;
             margin: 20px auto;
             padding: 20px;
-            background: white;
+            background: rgb(2, 42, 56);
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        h1, h2, h3 {
-            color: #0056b3;
+        h2{
+            color:whitesmoke;
+        }
+        h3{
+            color:whitesmoke;
         }
         pre {
             background: #f4f4f4;
@@ -46,29 +51,38 @@
         ul {
             margin: 10px 0;
             padding-left: 20px;
+            color: wheat;
         }
         li {
             margin: 5px 0;
+            color: wheat;
+        }
+        p{
+            color: wheat;
         }
         footer {
             text-align: center;
             margin-top: 20px;
             padding: 10px 0;
-            background: #0056b3;
-            color: white;
+            background:rgb(196, 233, 247);
         }
     </style>
 </head>
 <body>
 
 <header>
-    <h1>Sankalan 2.0 Data Transfer Plugin</h1>
+    <img src="images/amrut_logo.png" alt="Left Logo" style="height: 80px; width: 160px; margin-left: 20px;" >  
+    <h1 style="color: rgb(2, 42, 56); margin: 0; font-size: 40px; ">Sankalan 2.0 Data Transfer Plugin</h1>
+<div style="display: flex;">
+    <img src="images/isro.png" alt="Right Logo" style="height: 80px; width: 80px;">
+    <img src="images/iirs.png" alt="Right Logo"  style="height: 80px; width: 80px; margin-left: 20px; margin-right: 20px;">
+</div>
 </header>
 
 <div class="container">
     <section>
         <h2>Overview</h2>
-        <p>Sankalan 2.0 is a powerful data transfer plugin designed for seamless integration with QGIS. Developed by IIRS under ISRO, this plugin facilitates efficient data exchange and management, ensuring smooth workflows for geospatial applications. The main purpose of this plugin is to transfer data from a QGIS project to the Sankalan Mobile App to vet attributes on the ground. Target users are planning and administrative bodies under the AMRUT 2.0 Scheme of the Ministry of Urban and Housing Affairs.</p>
+        <p style="text-align: justify;">Sankalan 2.0 is a powerful data transfer plugin designed for seamless integration with QGIS. Developed by IIRS under ISRO, this plugin facilitates efficient data exchange and management, ensuring smooth workflows for geospatial applications. The main purpose of this plugin is to transfer data from a QGIS project to the Sankalan Mobile App to vet attributes on the ground. Target users are planning and administrative bodies under the AMRUT 2.0 Scheme of the Ministry of Urban and Housing Affairs.</p>
     </section>
 
     <section>
@@ -103,22 +117,24 @@
 
     <section>
         <h2>Usage</h2>
+        <p>This plugin is specially designed and developed for data collection under <strong><a style="color: aqua;" href="https://amrut.mohua.gov.in/">AMRUT 2.0<a></strong>
+        The main purpose of this plugin is to transfer data to mobile application for vetting on ground. </p>
         <ol>
             <li>Open the plugin from the <strong>Plugins</strong> menu in QGIS.</li>
             <li>Use the main menu to select "Data to Mobile."</li>
             <li>Follow these steps:</li>
         </ol>
 
-        <h3>Layer Selection</h3>
+        <h3>➙ Layer Selection</h3>
         <ul>
             <li>Select the grid or segmentation layer for clipping.</li>
             <li>Validate the selected layer to ensure compatibility.</li>
         </ul>
 
-        <h3>Grid Creation</h3>
+        <h3>➙ Grid Creation</h3>
         <p>Create a grid layer if no segmentation layer is available.</p>
 
-        <h3>Clipping and Export</h3>
+        <h3>➙ Clipping and Export</h3>
         <ul>
             <li>Specify an output directory for the exported files.</li>
             <li>Run the clipping process. A progress bar will indicate the process, and a confirmation dialog will appear upon completion.</li>
@@ -127,17 +143,20 @@
 
     <section>
         <h2>Screenshots</h2>
-        <h3>Main Menu</h3>
-        <img src="Screenshot%20from%202025-01-17%2017-17-58.png" alt="Main Menu">
+        <h3 style="margin-top: 20px;">1. Main Menu</h3>
+        <img src="images/Main.png" alt="Main Menu">
 
-        <h3>Clipping and Export</h3>
-        <img src="Screenshot%20from%202025-01-17%2017-19-13.png" alt="Clipping and Export">
+        <h3 style="margin-top: 70px;">2. Layer Selection</h3>
+        <img src="images/Layer_selection.png" alt="Layer Selection">
 
-        <h3>Layer Validation</h3>
-        <img src="Screenshot%20from%202025-01-17%2017-18-54.png" alt="Layer Validation">
+        <h3 style="margin-top: 70px;">3. Layer Validation</h3>
+        <img src="images/Layer_Validation.png" alt="Layer Validation">
 
-        <h3>Output Directory Selection</h3>
-        <img src="Screenshot%20from%202025-01-17%2017-19-04.png" alt="Output Directory Selection">
+        <h3 style="margin-top: 70px;">4. Griding</h3>
+        <img src="images/Griding.png" alt="Griding">
+      
+        <h3 style="margin-top: 70px;">5. Clipping</h3>
+        <img src="images/Clipping.png" alt="Clipping">
     </section>
 
     <section>
@@ -151,15 +170,14 @@
         </ol>
     </section>
 
-    <section>
-        <h2>License</h2>
-        <p>&copy; 2025 Indian Institute of Remote Sensing (IIRS), Indian Space Research Organisation (ISRO). All rights reserved.</p>
-        <p>For any queries, contact us through the documentation portal.</p>
-    </section>
+  
 </div>
 
 <footer>
-    <p>Empowering geospatial innovation through advanced tools.</p>
+    <section>
+        <p style="color: rgb(2, 42, 56);">&copy; 2025 Indian Institute of Remote Sensing (IIRS), Indian Space Research Organisation (ISRO). All rights reserved.</p>
+        <p style="color: rgb(2, 42, 56);">For any queries, contact us at <a style="color: rgb(57, 69, 136);" href="mailto:amrut@iirs.gov.in"> amrut@iirs.gov.in</a>.</p>
+    </section>
 </footer>
 
 </body>
