@@ -3,7 +3,6 @@ from PyQt5.QtCore import Qt, QTimer
 from qgis.core import QgsProject, QgsVectorLayer, QgsCoordinateTransform, QgsRasterLayer, QgsProcessingFeedback, QgsProcessingContext
 from qgis.gui import QgsMapCanvas
 from PyQt5.QtGui import QColor
-from . import new_feature_choice
 from . import verification_dialog 
 
 import zipfile
