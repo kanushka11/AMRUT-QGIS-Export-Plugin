@@ -1,13 +1,16 @@
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QPushButton, QFileDialog, QMessageBox, QLabel, QLineEdit, QHBoxLayout, QComboBox, QApplication
+    QDialog, QVBoxLayout, QPushButton, QFileDialog, QMessageBox, QLabel, QLineEdit, QHBoxLayout, QComboBox
 )
 from PyQt5.QtCore import Qt
 
-from . import qc_visualization_dialog as qc
 import zipfile
 import json
+from qgis.core import (
+    QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsRectangle, QgsMapLayer, QgsMessageLog, Qgis
+)
+
 from . import export_ui as ui
-from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsRectangle, QgsMapLayer
+from . import qc_visualization_dialog as qc
 
 class ImportDialog(QDialog):
     def __init__(self, iface):
@@ -15,65 +18,108 @@ class ImportDialog(QDialog):
         self.iface = iface
 
     def reconstruct_or_qc_dialog(self):
-        dialog = self._create_dialog("AMRUT 2.0", 350, 200)
+        """Main dialog to choose between reconstructing a layer or performing a quality check"""
+        dialog = self.create_dialog("AMRUT 2.0", 350, 200)
         layout = QVBoxLayout(dialog)
 
+        # Add logo layout
         logo_layout = ui.createLogoLayout("Sankalan 2.0")
         layout.addLayout(logo_layout)
 
-        self._add_centered_button(layout, "Reconstruct Layer", lambda: self._open_dialog(dialog, self.reconstruct_dialog))
-        self._add_centered_button(layout, "Quality Check", lambda: self._open_dialog(dialog, self.quality_check_dialog))
+        # Add buttons for "Reconstruct Layer" and "Quality Check"
+        self.add_centered_button(
+            layout, 
+            "Reconstruct Layer", 
+            lambda: self._open_dialog(dialog, self.reconstruct_dialog)
+        )
+        self.add_centered_button(
+            layout, 
+            "Quality Check", 
+            lambda: self._open_dialog(dialog, self.quality_check_dialog)
+        )
 
         dialog.exec_()
 
-    def _create_dialog(self, title, width, height):
+    def create_dialog(self, title, width, height):
+        """Helper function to create a generic dialog window"""
         dialog = QDialog(self)
         dialog.setWindowTitle(title)
         dialog.setFixedSize(width, height)
         return dialog
 
-    def _add_centered_button(self, layout, text, callback):
+    def add_centered_button(self, layout, text, callback):
+        """Helper function to add a centered button to a layout"""
         button = QPushButton(text)
         button.setFixedSize(200, 25)
         button.clicked.connect(callback)
         layout.addWidget(button, alignment=Qt.AlignCenter)
 
     def _open_dialog(self, current_dialog, next_dialog):
+        """Close the current dialog and open the next one"""
         current_dialog.accept()
-        next_dialog()
+        try:
+            next_dialog()
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error opening dialog: {str(e)}", 'AMRUT', Qgis.Critical)
 
     def reconstruct_dialog(self):
+        """Placeholder for the "Reconstruct Layer" dialog"""
         pass
 
     def quality_check_dialog(self):
-        qc_dialog = self._create_dialog("AMRUT 2.0", 500, 250)
-        layout = QVBoxLayout(qc_dialog)
-        logo_layout = ui.createLogoLayout("")
-        layout.addLayout(logo_layout)
-        layout.addSpacing(10) 
-        self.file_input = self._add_file_input(layout)
+        """Quality check dialog for layer selection and validation"""
+        try:
+            self.qc_dialog = self.create_dialog("AMRUT 2.0", 500, 250)
+            layout = QVBoxLayout(self.qc_dialog)
 
-        self.layer_dropdown = QComboBox(qc_dialog)
-        self.raster_layer_dropdown = QComboBox(qc_dialog)
-        layout.addSpacing(15) 
-        self._add_dropdown_with_placeholder(layout, "Select a Raster layer: (Optional)", self.raster_layer_dropdown, "Select a Raster Layer", populate=False)
-        layout.addSpacing(15) 
-        self._add_dropdown_with_placeholder(layout, "Select layer to check:", self.layer_dropdown, "Select any layer for Quality Check")
-        layout.addSpacing(20) 
-        raster_layers = [
-            layer.name() for layer in QgsProject.instance().mapLayers().values()
-            if layer.type() == QgsMapLayer.RasterLayer
-        ]
-        self.raster_layer_dropdown.addItems(raster_layers)
+            # Add logo layout
+            logo_layout = ui.createLogoLayout("")
+            layout.addLayout(logo_layout)
+            layout.addSpacing(10)
 
-        proceed_button = QPushButton("Proceed Quality Check")
-        proceed_button.setFixedSize(150, 25)
-        proceed_button.clicked.connect(self.proceed_quality_check)
-        layout.addWidget(proceed_button, alignment=Qt.AlignCenter)
+            # Add file input field
+            self.file_input = self._add_file_input(layout)
 
-        qc_dialog.exec_()
+            # Add dropdowns for layer and optional raster layer selection
+            self.layer_dropdown = QComboBox(self.qc_dialog)
+            self.raster_layer_dropdown = QComboBox(self.qc_dialog)
+
+            layout.addSpacing(15)
+            self._add_dropdown_with_placeholder(
+                layout,
+                "Select a Raster layer: (Optional)",
+                self.raster_layer_dropdown,
+                "Select a Raster Layer",
+                populate=False
+            )
+            layout.addSpacing(15)
+            self._add_dropdown_with_placeholder(
+                layout,
+                "Select layer to check:",
+                self.layer_dropdown,
+                "Select any layer for Quality Check"
+            )
+            layout.addSpacing(20)
+
+            # Populate raster layers in the dropdown
+            raster_layers = [
+                layer.name() for layer in QgsProject.instance().mapLayers().values()
+                if layer.type() == QgsMapLayer.RasterLayer
+            ]
+            self.raster_layer_dropdown.addItems(raster_layers)
+
+            # Add proceed button for quality check
+            proceed_button = QPushButton("Proceed Quality Check")
+            proceed_button.setFixedSize(150, 25)
+            proceed_button.clicked.connect(self.proceed_quality_check)
+            layout.addWidget(proceed_button, alignment=Qt.AlignCenter)
+
+            self.qc_dialog.exec_()
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error in quality_check_dialog: {str(e)}", 'AMRUT', Qgis.Critical)
 
     def _add_file_input(self, layout):
+        """Add file input layout with a browse button"""
         file_layout = QHBoxLayout()
         file_input = QLineEdit()
         file_input.setPlaceholderText("Select a .amrut file...")
@@ -87,143 +133,117 @@ class ImportDialog(QDialog):
         return file_input
 
     def _add_dropdown_with_placeholder(self, layout, label_text, dropdown, placeholder, populate=True):
+        """Add a dropdown with a label and placeholder text"""
         dropdown_layout = QHBoxLayout()  # Use a horizontal layout for label and dropdown
         label = QLabel(label_text)
         dropdown_layout.addWidget(label)
-        
+
         dropdown.addItem(placeholder)
-        dropdown.model().item(0).setEnabled(False)
+        dropdown.model().item(0).setEnabled(False)  # Disable the placeholder item
+
         if populate:
-            dropdown.addItems([])  
-        
+            dropdown.addItems([])  # Populate dropdown if needed
+
         dropdown_layout.addWidget(dropdown)
-        layout.addLayout(dropdown_layout)  
+        layout.addLayout(dropdown_layout)
 
     def browse_file(self):
-        file, _ = QFileDialog.getOpenFileName(self, "Select a File", "", "AMRUT Files (*.amrut);;All Files (*)")
+        """Open file dialog to select an .amrut file"""
+        try:
+            file, _ = QFileDialog.getOpenFileName(
+                self, 
+                "Select a File", 
+                "", 
+                "AMRUT Files (*.amrut);;All Files (*)"
+            )
 
-        if file:
-            if file.endswith(".amrut"):
-                self.validate_amrut_file(file)
-            else:
-                QMessageBox.warning(self, "Invalid File", "Please select a valid .amrut file.")
-                self.file_input.clear()
+            if file:
+                if file.endswith(".amrut"):
+                    self.validate_amrut_file(file)
+                else:
+                    QMessageBox.warning(self, "Invalid File", "Please select a valid .amrut file.")
+                    self.file_input.clear()
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error in browse_file: {str(e)}", 'AMRUT', Qgis.Critical)
 
     def validate_amrut_file(self, file_path):
+        """Validate the selected .amrut file"""
         try:
             self.layer_dropdown.clear()
             self.layer_dropdown.addItem("Select any layer for Quality Check")  # Add default text
             self.layer_dropdown.model().item(0).setEnabled(False)
 
             with zipfile.ZipFile(file_path, 'r') as zip_ref:
-                if not self._validate_metadata(zip_ref):
+                # Check for metadata.json in the .amrut file
+                if 'metadata.json' not in zip_ref.namelist():
+                    QMessageBox.warning(self, "Missing Metadata File", "The .amrut file does not contain 'metadata.json'.")
+                    self.file_input.clear()
                     return
 
                 metadata = json.loads(zip_ref.read('metadata.json'))
 
+                # Check for layers in metadata
                 if 'layers' not in metadata or not isinstance(metadata['layers'], list):
                     QMessageBox.warning(self, "Invalid Metadata", "'layers' array is missing or invalid in metadata.json.")
                     self.file_input.clear()
-                    return False
+                    return
 
-                # Extract layer names from the updated format
+                # Extract layer names from metadata
                 layer_names = [
                     layer.split(" : ")[0].strip("{}").strip()
                     for layer in metadata['layers']
                 ]
 
-                if not self._validate_geojson_files(zip_ref, layer_names):
+                # Validate if geojson files exist in the .amrut file
+                missing_files = [
+                    layer for layer in layer_names
+                    if f"{layer}.geojson" not in zip_ref.namelist()
+                ]
+                if missing_files:
+                    QMessageBox.warning(self, "Missing GeoJSON Files", f"The following GeoJSON files are missing: {', '.join(missing_files)}")
+                    self.file_input.clear()
                     return
-                
+
+                # Validate if layers exist in the QGIS project
                 project_layers = [layer.name() for layer in QgsProject.instance().mapLayers().values()]
                 missing_in_project = [
                     layer for layer in layer_names
                     if layer not in project_layers
                 ]
                 if missing_in_project:
-                    QMessageBox.warning(self,"Missing Layers in QGIS",f"The following layers are missing in the QGIS project: {', '.join(missing_in_project)}")
+                    QMessageBox.warning(self, "Missing Layers in QGIS", f"The following layers are missing in the project: {', '.join(missing_in_project)}")
                     self.file_input.clear()
                     return
-                
+
+                # Identify layers with pending QC
                 if 'layers_qc_completed' not in metadata:
                     metadata['layers_qc_completed'] = []
 
-                layers_qc_completed = metadata['layers_qc_completed']
                 layers_qc_pending = [
                     layer for layer in layer_names
-                    if layer not in layers_qc_completed
+                    if layer not in metadata['layers_qc_completed']
                 ]
 
+                # Extract bounds from metadata
                 self.metadata_bounds = {key: metadata[key] for key in ["north", "south", "east", "west"]}
+
                 self.file_input.setText(file_path)
                 self.layer_dropdown.addItems(layers_qc_pending)
 
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
-            self.file_input.clear()
-
-    def _validate_metadata(self, zip_ref):
-        if 'metadata.json' not in zip_ref.namelist():
-            QMessageBox.warning(self, "Missing Metadata File", "The .amrut file does not contain 'metadata.json' file.")
-            self.file_input.clear()
-            return False
-        return True
-
-    def _validate_geojson_files(self, zip_ref, layer_names):
-        missing_files = [
-            layer for layer in layer_names
-            if f"{layer}.geojson" not in zip_ref.namelist()
-        ]
-        if missing_files:
-            QMessageBox.warning(
-                self,
-                "Missing GeoJSON Files",
-                f"The following GeoJSON files are missing in the .amrut file: {', '.join(missing_files)}"
-            )
-            self.file_input.clear()
-            return False
-
-        return True
+            QgsMessageLog.logMessage(f"Error in validate_amrut_file: {str(e)}", 'AMRUT', Qgis.Critical)
 
     def proceed_quality_check(self):
-        selected_layer_name = self.layer_dropdown.currentText()
-        if selected_layer_name == "Select any layer for Quality Check" or not selected_layer_name:
-            QMessageBox.warning(self, "No Layer Selected", "Please select a valid layer for quality check.")
-            return
+        """Proceed with the quality check process for the selected layer"""
+        try:
+            selected_layer_name = self.layer_dropdown.currentText()
 
-        selected_raster_layer_name = self.raster_layer_dropdown.currentText()
-        if selected_raster_layer_name != "Select a Raster Layer":
-            raster_layer = next(
-                (layer for layer in QgsProject.instance().mapLayers().values()
-                if layer.name() == selected_raster_layer_name and layer.type() == QgsMapLayer.RasterLayer),
-                None
-            )
-            
-            # Get raster extent in its original CRS (EPSG:32644)
-            extent = raster_layer.extent()
-            raster_bounds = {
-                "north": extent.yMaximum(),
-                "south": extent.yMinimum(),
-                "east": extent.xMaximum(),
-                "west": extent.xMinimum()
-            }
-            
-            # Prepare to transform raster bounds from EPSG:32644 to EPSG:4326
-            raster_crs = QgsCoordinateReferenceSystem("EPSG:32644")
-            wgs84 = QgsCoordinateReferenceSystem("EPSG:4326")
-            
-            # Initialize coordinate transform for raster to WGS 84
-            coord_transform_raster_to_wgs84 = QgsCoordinateTransform(raster_crs, wgs84, QgsProject.instance())
-            
-            # Transform raster bounds to WGS 84
-            transformed_northwest = coord_transform_raster_to_wgs84.transform(raster_bounds["west"], raster_bounds["north"])
-            transformed_southeast = coord_transform_raster_to_wgs84.transform(raster_bounds["east"], raster_bounds["south"])
+            # Ensure a valid layer is selected
+            if selected_layer_name == "Select any layer for Quality Check" or not selected_layer_name:
+                QMessageBox.warning(self, "No Layer Selected", "Please select a valid layer for quality check.")
+                return
 
-            # Create a new rectangle in WGS 84 for the transformed raster extent
-            transformed_raster_extent = QgsRectangle(transformed_northwest.x(), transformed_southeast.y(),
-                                                    transformed_southeast.x(), transformed_northwest.y())
-
-            # Create a rectangle for the vector metadata bounds (in EPSG:4326)
+            # Create grid extent from metadata bounds
             grid_extent = QgsRectangle(
                 self.metadata_bounds['west'],
                 self.metadata_bounds['south'],
@@ -231,22 +251,60 @@ class ImportDialog(QDialog):
                 self.metadata_bounds['north']
             )
 
-            # Check if the transformed raster bounds cover the vector bounds
-            if not (transformed_raster_extent.contains(grid_extent)):
-                QMessageBox.warning(self, "Extent Validation Failed",
-                                    "The grid's extent does not fall within the raster layer's extent.")
-                return
+            # Check if a raster layer is selected
+            selected_raster_layer_name = self.raster_layer_dropdown.currentText()
+            if selected_raster_layer_name != "Select a Raster Layer":
+                # Find the selected raster layer
+                raster_layer = next(
+                    (layer for layer in QgsProject.instance().mapLayers().values()
+                     if layer.name() == selected_raster_layer_name and layer.type() == QgsMapLayer.RasterLayer),
+                    None
+                )
 
-        # Close the current dialog
-        self.accept()
+                if not raster_layer:
+                    QMessageBox.warning(self, "Raster Layer Not Found", "The selected raster layer could not be found.")
+                    return
 
-        # Open the new dialog, passing the AMRUT file path
-        qualityCheckVisualizationDialog = qc.QualityCheckVisualizationDialog(
-            self,
-            selected_layer_name=selected_layer_name,
-            amrut_file_path=self.file_input.text(),
-            selected_raster_layer_name=selected_raster_layer_name,
-            grid_extent=grid_extent  
-        )
+                # Get raster extent in its original CRS (EPSG:32644)
+                extent = raster_layer.extent()
+                raster_bounds = {
+                    "north": extent.yMaximum(),
+                    "south": extent.yMinimum(),
+                    "east": extent.xMaximum(),
+                    "west": extent.xMinimum()
+                }
 
-        qualityCheckVisualizationDialog.exec_()
+                # Transform raster bounds to WGS 84
+                raster_crs = QgsCoordinateReferenceSystem("EPSG:32644")
+                wgs84 = QgsCoordinateReferenceSystem("EPSG:4326")
+                coord_transform_raster_to_wgs84 = QgsCoordinateTransform(raster_crs, wgs84, QgsProject.instance())
+
+                transformed_northwest = coord_transform_raster_to_wgs84.transform(raster_bounds["west"], raster_bounds["north"])
+                transformed_southeast = coord_transform_raster_to_wgs84.transform(raster_bounds["east"], raster_bounds["south"])
+
+                transformed_raster_extent = QgsRectangle(
+                    transformed_northwest.x(), 
+                    transformed_southeast.y(),
+                    transformed_southeast.x(), 
+                    transformed_northwest.y()
+                )
+
+                # Check if raster extent covers the vector extent
+                if not (transformed_raster_extent.contains(grid_extent)):
+                    QMessageBox.warning(self, "Extent Validation Failed", "The grid's extent does not fall within the raster layer's extent.")
+                    return
+            else:
+                selected_raster_layer_name = None
+
+            # Open the Quality Check Visualization Dialog
+            qualityCheckVisualizationDialog = qc.QualityCheckVisualizationDialog(
+                self,
+                selected_layer_name=selected_layer_name,
+                amrut_file_path=self.file_input.text(),
+                selected_raster_layer_name=selected_raster_layer_name,
+                grid_extent=grid_extent
+            )
+
+            qualityCheckVisualizationDialog.exec_()
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error in proceed_quality_check: {str(e)}", 'AMRUT', Qgis.Critical)

@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame
 from PyQt5.QtCore import Qt
-from qgis.core import QgsProject, QgsRectangle
+from qgis.core import QgsProject, QgsRectangle, QgsGeometry, QgsWkbTypes
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
 from PyQt5.QtGui import QColor
 
@@ -113,34 +113,76 @@ class VerificationDialog:
 
         return frame
 
+    def calculate_dynamic_buffer(self, geometry):
+        """
+        Calculate a dynamic buffer based on geometry type and size.
+        """
+        geometry_type = QgsWkbTypes.geometryType(geometry.wkbType())
+
+        if geometry_type == QgsWkbTypes.PointGeometry:
+            # For point geometries, use a small fixed buffer
+            buffer = 0.0001  # Map units (adjust based on your map scale)
+
+        elif geometry_type == QgsWkbTypes.LineGeometry:
+            # For line geometries, use a buffer proportional to the length of the line
+            line_length = geometry.length()
+            buffer = line_length * 0.5  # 20% of length or a minimum of 100 units
+
+        elif geometry_type == QgsWkbTypes.PolygonGeometry:
+            # For polygon geometries, use a buffer based on the diagonal of the bounding box
+            bbox = geometry.boundingBox()
+            bbox_width = bbox.width()
+            bbox_height = bbox.height()
+
+            # Diagonal size of the bounding box
+            diagonal = (bbox_width**2 + bbox_height**2) ** 0.5
+            buffer = diagonal * 0.5  # 50% of diagonal
+
+        else:
+            # Default buffer for unsupported geometry types
+            buffer = 0.0001  # Map units
+
+        return buffer
+
     def update_canvases(self):
         """Update canvases to focus on the current feature."""
         if self.current_feature_index < len(self.new_feature_ids):
-            # Convert the feature_id to integer, assuming they are float in new_feature_ids
+            # Convert the feature_id to integer
             feature_id = int(list(self.new_feature_ids)[self.current_feature_index])
 
-            # Get features
+            # Get the feature from the temporary layer
             temp_feature = next(self.temporary_layer.getFeatures(f"feature_id = {feature_id}"), None)
 
             if temp_feature:
-                bbox = temp_feature.geometry().boundingBox()
-                extent = QgsRectangle(bbox.xMinimum(), bbox.yMinimum(), bbox.xMaximum(), bbox.yMaximum())
-                # Zoom to the centroid on the left canvas (Selected Layer)
+                # Get the centroid of the feature's geometry
+                centroid_geom = temp_feature.geometry().centroid()
+                centroid_point = centroid_geom.asPoint()
+
+                # Dynamically calculate the buffer for zooming
+                buffer = self.calculate_dynamic_buffer(temp_feature.geometry())
+
+                # Define an extent around the centroid for zooming
+                extent = QgsRectangle(
+                    centroid_point.x() - buffer,
+                    centroid_point.y() - buffer,
+                    centroid_point.x() + buffer,
+                    centroid_point.y() + buffer
+                )
+
+                # Zoom to the centroid on both canvases
                 self.zoom_to_feature_on_left_canvas(extent)
-                
-                # Zoom to the feature's bounding box on the right canvas (Temporary Layer)
                 self.zoom_to_feature_on_right_canvas(extent)
             else:
                 print(f"Feature with feature_id {feature_id} not found in the temporary layer.")
 
 
     def zoom_to_feature_on_left_canvas(self, extent):
-        """Zoom to the feature's bounding box on the temporary layer (right canvas)."""
+        """Zoom to the feature's centroid on the left canvas (selected layer)."""
         self.left_canvas.setExtent(extent)
-        self.left_canvas.refresh() 
+        self.left_canvas.refresh()
 
     def zoom_to_feature_on_right_canvas(self, extent):
-        """Zoom to the feature's bounding box on the temporary layer (right canvas)."""
+        """Zoom to the feature's centroid on the right canvas (temporary layer)."""
         self.right_canvas.setExtent(extent)
         self.right_canvas.refresh()
 
