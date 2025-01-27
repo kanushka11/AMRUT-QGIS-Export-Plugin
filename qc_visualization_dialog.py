@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel
 from PyQt5.QtCore import Qt, QTimer
-from qgis.core import QgsProject, QgsVectorLayer, QgsCoordinateTransform, QgsRasterLayer, QgsProcessingFeedback, QgsProcessingContext, QgsMessageLog
+from qgis.core import QgsProject, QgsVectorLayer, QgsCoordinateTransform, QgsRasterLayer, QgsProcessingFeedback, QgsProcessingContext, QgsMessageLog, Qgis
 from qgis.gui import QgsMapCanvas
 from PyQt5.QtGui import QColor
 from . import verification_dialog
@@ -333,6 +333,7 @@ class QualityCheckVisualizationDialog(QDialog):
             # Refresh all layers to clear cached features
             QgsProject.instance().reloadAllLayers()
             self.refresh_map_canvas()
+            QgsProject.instance().write()
 
         except Exception as e:
             QgsMessageLog.logMessage(f"Error during cleanup in closeEvent: {str(e)}", 'AMRUT', Qgis.Critical)

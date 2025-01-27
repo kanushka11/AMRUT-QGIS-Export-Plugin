@@ -8,16 +8,9 @@ from PyQt5.QtGui import QColor
 class VerificationDialog:
     def __init__(self, selected_layer_name, selected_raster_layer_name):
 
-        # Fetch the selected vector layer based on its name
+        # Fetch the layer based on its name
         self.selected_layer = self.get_layer_by_name(selected_layer_name)
-        # Store the name of the selected raster layer
-        self.selected_raster_layer_name = selected_raster_layer_name
-
-        # If a raster layer name is provided, fetch the corresponding layer
-        if self.selected_raster_layer_name != 'None':
-            self.selected_raster_layer = self.get_layer_by_name(f"Temporary_{selected_raster_layer_name}")
-
-        # Fetch the temporary version of the selected vector layer
+        self.selected_raster_layer = self.get_layer_by_name(f"Temporary_{selected_raster_layer_name}")
         self.temporary_layer = self.get_layer_by_name(f"Temporary_{selected_layer_name}")
 
     def check_for_new_features(self):
@@ -68,11 +61,10 @@ class VerificationDialog:
         dialog.exec_()  # Display the dialog
 
     def get_layer_by_name(self, layer_name):
-        """Retrieve a layer by its name from the QGIS project."""
+        """Retrieve a layer by its name from the QGIS project. If layer not found return None"""
         for layer in QgsProject.instance().mapLayers().values():
             if layer.name() == layer_name:
                 return layer 
-        QgsMessageLog.logMessage(f"Layer '{layer_name}' not found.", "AMRUT", Qgis.Warning)
         return None
 
     def show_verification_dialog(self, parent_dialog):
@@ -152,12 +144,7 @@ class VerificationDialog:
         if layer == self.temporary_layer:
             self.set_colour_opacity(self.temporary_layer, 0.6)  # Adjust the opacity for better visualization
 
-        # Add the raster layer if it exists, otherwise only add the provided layer
-        if self.selected_raster_layer_name != 'None':
-            canvas.setLayers([layer, self.selected_raster_layer])
-        else:
-            canvas.setLayers([layer])
-
+        canvas.setLayers([layer, self.selected_raster_layer])
         canvas.setCanvasColor(QColor("white"))  # Set the canvas background color to white
         canvas.setMapTool(QgsMapToolPan(canvas))  # Enable panning on the canvas
         frame_layout.addWidget(canvas)  # Add the canvas to the frame layout
@@ -247,6 +234,7 @@ class VerificationDialog:
             bbox_height = bbox.height()  # Height of the bounding box
             diagonal = (bbox_width**2 + bbox_height**2) ** 0.5  # Calculate the diagonal length
             buffer = diagonal * 0.5  # Use half the diagonal length as the buffer
+            print(buffer)
         else:
             buffer = 0.0001  # Default buffer size for unsupported geometry types
 
