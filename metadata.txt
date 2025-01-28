@@ -20,7 +20,7 @@ repository=https://gitlab.com/iirs-amrut/amrut-qgis-plugin
 
 hasProcessingProvider=no
 # Uncomment the following line and add your changelog:
-# changelog=
+changelog= Quality Check for data from mobile application added
 
 # Tags are comma separated with spaces allowed
 tags=python
