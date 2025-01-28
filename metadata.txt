@@ -6,7 +6,7 @@
 name=Sankalan 2
 qgisMinimumVersion=3.0
 description=Tool for transferring data form and to Sankalan 2.0 Mobile App for field survey .
-version=0.1
+version=0.2
 author=Shubhangam Garg
 email=amrut@iirs.gov.in
 
