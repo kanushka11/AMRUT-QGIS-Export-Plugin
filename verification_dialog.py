@@ -234,7 +234,6 @@ class VerificationDialog:
             bbox_height = bbox.height()  # Height of the bounding box
             diagonal = (bbox_width**2 + bbox_height**2) ** 0.5  # Calculate the diagonal length
             buffer = diagonal * 0.5  # Use half the diagonal length as the buffer
-            print(buffer)
         else:
             buffer = 0.0001  # Default buffer size for unsupported geometry types
 
