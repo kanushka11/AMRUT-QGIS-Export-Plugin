@@ -166,20 +166,20 @@ def getListLayout(itemList, lable) :
     
     return layout
 
-def createLogoLayout():
+def createLogoLayout(label_name):
     pwd = os.path.dirname(os.path.abspath(__file__))
     assets_dir = os.path.join(pwd, "assets")
     logo1_name = 'iirs.png'
     logo2_name = 'amrut.png'
     logo_size = (50, 50)
-    label_text = "Export Data for Mobile App" 
+    label_text = label_name 
 
     logo1_path = os.path.join(assets_dir, logo1_name)
     logo2_path = os.path.join(assets_dir, logo2_name)
 
     # Debugging: Check paths
-    print(f"Logo 1 Path: {logo1_path}")
-    print(f"Logo 2 Path: {logo2_path}")
+    # print(f"Logo 1 Path: {logo1_path}")
+    # print(f"Logo 2 Path: {logo2_path}")
 
     # Check if files exist
     if not os.path.exists(logo1_path) or not os.path.exists(logo2_path):
