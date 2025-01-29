@@ -1,17 +1,24 @@
-from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame
+from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame, QMessageBox
 from PyQt5.QtCore import Qt
-from qgis.core import QgsProject, QgsRectangle, QgsMessageLog, Qgis, QgsWkbTypes
+from qgis.core import QgsProject, QgsRectangle, QgsMessageLog, Qgis, QgsWkbTypes, QgsVectorFileWriter, QgsCoordinateTransformContext
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
 from PyQt5.QtGui import QColor
 
+import zipfile
+import os
+import tempfile
+import shutil
+import json
 
 class VerificationDialog:
-    def __init__(self, selected_layer_name, selected_raster_layer_name):
+    def __init__(self, selected_layer_name, selected_raster_layer_name, amrut_file_path, grid_extent):
 
         # Fetch the layer based on its name
         self.selected_layer = self.get_layer_by_name(selected_layer_name)
         self.selected_raster_layer = self.get_layer_by_name(f"Temporary_{selected_raster_layer_name}")
         self.temporary_layer = self.get_layer_by_name(f"Temporary_{selected_layer_name}")
+        self.amrut_file_path = amrut_file_path
+        self.grid_extent = grid_extent
 
     def check_for_new_features(self):
         """
@@ -180,7 +187,7 @@ class VerificationDialog:
                     f"Feature with feature_id {feature_id} not found in the .amrut file.",
                     "AMRUT",
                     Qgis.Warning
-                )
+                )            
 
     def zoom_to_feature_on_canvas(self, extent, canvas):
         """Zoom to the feature's bounding box on the canvas."""
@@ -207,13 +214,13 @@ class VerificationDialog:
         self.current_feature_index += 1  # Increment the feature index
         if self.current_feature_index < len(self.new_feature_ids):  # Check if there are more features
             self.update_canvases()  # Update canvases to display the next feature
-        else:
+        else:                               
             self.set_colour_opacity(self.temporary_layer, 1)  # Reset the opacity of the temporary layer
             self.dialog.close()  # Close the verification dialog
 
     def set_colour_opacity(self, layer, opacity):
         """Set the opacity of the layer for visualization."""
-        symbol = layer.renderer().symbol()  # Get the symbol for the layer
+        symbol = layer.renderer().symbol()  # Get the symbol for the layer          
         if symbol:
             symbol.setOpacity(opacity)  # Set the opacity of the symbol
         layer.triggerRepaint()  # Trigger a repaint to apply the changes
@@ -238,3 +245,106 @@ class VerificationDialog:
             buffer = 0.0001  # Default buffer size for unsupported geometry types
 
         return buffer  # Return the calculated buffer size
+
+    def accept_data(self):
+        """Replace old GeoJSON file in .amrut file with new GeoJSON file and update metadata.json."""
+        temp_dir = None
+        try:
+            geojson_filename = f"{self.selected_layer.name()}.geojson"
+            geojson_name_without_ext = os.path.splitext(geojson_filename)[0]
+
+            # Create a temporary directory for extraction
+            temp_dir = tempfile.mkdtemp()
+
+            # Extract the contents of the .amrut file to the temporary directory
+            with zipfile.ZipFile(self.amrut_file_path, 'r') as zip_ref:
+                zip_ref.extractall(temp_dir)
+
+                # Read metadata.json from the archive
+                metadata = json.loads(zip_ref.read('metadata.json'))
+
+                # Check for 'layers' array in metadata
+                if 'layers' not in metadata or not isinstance(metadata['layers'], list):
+                    QMessageBox.warning(self, "Invalid Metadata", "'layers' array is missing or invalid in metadata.json.")
+                    self.file_input.clear()
+                    return
+
+                # Extract layer names from the 'layers' array
+                layer_names = [
+                    layer.split(" : ")[0].strip("{}").strip()
+                    for layer in metadata['layers']
+                ]
+
+                # Ensure 'layers_qc_completed' exists in metadata
+                if "layers_qc_completed" not in metadata:
+                    metadata["layers_qc_completed"] = []
+
+                # Append the current GeoJSON name to 'layers_qc_completed' if not already present
+                if geojson_name_without_ext not in metadata["layers_qc_completed"]:
+                    metadata["layers_qc_completed"].append(geojson_name_without_ext)
+
+                # Check if all layers are in 'layers_qc_completed'
+                all_verified = all(layer in metadata["layers_qc_completed"] for layer in layer_names)
+                
+                qc_status = None
+
+                # Update the qc_status field
+                if all_verified:
+                    qc_status = "Verified" 
+
+            # Check if the GeoJSON file exists in the archive
+            geojson_file_path = os.path.join(temp_dir, geojson_filename)
+            if not os.path.exists(geojson_file_path):
+                raise FileNotFoundError(f"GeoJSON file '{geojson_filename}' not found in the AMRUT file.")
+
+            # Validate the temporary layer
+            if not self.temporary_layer or not self.temporary_layer.isValid():
+                raise ValueError("Temporary layer is invalid.")
+
+            # Export the temporary layer to the GeoJSON format
+            options = QgsVectorFileWriter.SaveVectorOptions()
+            options.driverName = "GeoJSON"
+            options.forceMulti = True  # Ensures consistent geometry type
+            error = QgsVectorFileWriter.writeAsVectorFormatV2(
+                self.temporary_layer,
+                geojson_file_path,
+                QgsCoordinateTransformContext(),
+                options
+            )
+            if error[0] != QgsVectorFileWriter.NoError:
+                raise ValueError(f"Failed to write the temporary layer to GeoJSON format: {error}")
+
+            # Write the updated metadata.json back to the temporary directory
+            metadata_path = os.path.join(temp_dir, "metadata.json")
+            with open(metadata_path, "w") as metadata_file:
+                if not qc_status:
+                    metadata["qc_status"] = qc_status  # Update QC status
+                json.dump(metadata, metadata_file, indent=4)
+
+            # Create a new .amrut file with the updated GeoJSON and metadata
+            temp_amrut_path = self.amrut_file_path + ".tmp"
+            with zipfile.ZipFile(temp_amrut_path, 'w') as zip_ref:
+                for root, _, files in os.walk(temp_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, temp_dir)
+                        zip_ref.write(file_path, arcname)
+
+            # Replace the original .amrut file with the updated one
+            os.replace(temp_amrut_path, self.amrut_file_path)
+
+            QgsMessageLog.logMessage(
+                f"GeoJSON file '{geojson_filename}' successfully replaced in the AMRUT file. QC Status: {qc_status}",
+                "AMRUT",
+                Qgis.Info
+            )
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                f"Error replacing GeoJSON in AMRUT file: {str(e)}",
+                "AMRUT",
+                Qgis.Critical
+            )
+        finally:
+            # Cleanup: Delete the temporary directory
+            if temp_dir and os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)

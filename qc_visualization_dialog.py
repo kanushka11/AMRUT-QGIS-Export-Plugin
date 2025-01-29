@@ -17,7 +17,8 @@ class QualityCheckVisualizationDialog(QDialog):
         self.amrut_file_path = amrut_file_path
         self.selected_raster_layer_name = selected_raster_layer_name
         self.grid_extent = grid_extent
-
+        self.temporary_files = []  # List to track temporary files
+        
         self.setWindowTitle("AMRUT 2.0")
         self.setWindowState(Qt.WindowMaximized)
 
@@ -33,7 +34,7 @@ class QualityCheckVisualizationDialog(QDialog):
         raster_layer = self.get_layer_by_name(self.selected_raster_layer_name) if self.selected_raster_layer_name else None
 
         if layer:
-            left_panel, self.left_map_canvas = self.create_layer_visualization_panel(layer, f"{self.selected_layer_name} from Project", raster_layer, 0)
+            left_panel, self.left_map_canvas = self.create_layer_visualization_panel(layer, f"{self.selected_layer_name} (Original Data)", raster_layer, 0)
         else:
             left_panel, self.left_map_canvas = self.create_error_panel(f"Layer '{self.selected_layer_name}' not found in the project."), None
         layout.addLayout(left_panel)
@@ -52,7 +53,7 @@ class QualityCheckVisualizationDialog(QDialog):
 
     def show_new_feature_dialog(self):
         try:
-            newFeatureFound = verification_dialog.VerificationDialog(self.selected_layer_name, self.selected_raster_layer_name)
+            newFeatureFound = verification_dialog.VerificationDialog(self.selected_layer_name, self.selected_raster_layer_name, self.amrut_file_path, self.grid_extent)
             newFeatureFound.check_for_new_features()
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in show_new_feature_dialog: {str(e)}", 'AMRUT', Qgis.Critical)
@@ -122,7 +123,7 @@ class QualityCheckVisualizationDialog(QDialog):
                 # Create and return the visualization panel
                 panel_layout, map_canvas = self.create_layer_visualization_panel(
                     geojson_layer,
-                    f"{self.selected_layer_name} from AMRUT File",
+                    f"{self.selected_layer_name} (Field Data)",
                     raster_layer,
                     called_for,
                 )
@@ -153,6 +154,9 @@ class QualityCheckVisualizationDialog(QDialog):
                     with open(temp_geojson_file_path, 'w', encoding='utf-8') as temp_geojson_file:
                         temp_geojson_file.write(geojson_content)
 
+                    # Add the temporary file path to the list for cleanup
+                    self.temporary_files.append(temp_geojson_file_path)
+                    
                     # Load the GeoJSON into a vector layer using the temporary file path
                     geojson_layer = QgsVectorLayer(temp_geojson_file_path, layer_name, "ogr")
 
@@ -280,6 +284,10 @@ class QualityCheckVisualizationDialog(QDialog):
                     # Run the reprojection algorithm
                     reprojected_result = processing.run("gdal:warpreproject", reproject_params, context=processing_context, feedback=feedback)
 
+                    # Add the temporary raster file to the cleanup list
+                    temp_raster_path = reprojected_result['OUTPUT']
+                    self.temporary_files.append(temp_raster_path)
+
                     # Get the reprojected raster layer from the result
                     reprojected_raster_layer = QgsRasterLayer(reprojected_result['OUTPUT'], f"Temporary_{raster_layer.name()}")
 
@@ -377,23 +385,28 @@ class QualityCheckVisualizationDialog(QDialog):
     def closeEvent(self, event):
         """Override closeEvent to remove temporary layers and refresh the map canvas."""
         try:
-            # Remove the temporary layers
-            temporary_selected_layer_name = f"Temporary_{self.selected_layer_name}"
-            temporary_raster_layer_name = f"Temporary_{self.selected_raster_layer_name}"
-
-            self.remove_layer_by_name(temporary_selected_layer_name)
-            self.remove_layer_by_name(temporary_raster_layer_name)
+            # Remove temporary layers
+            self.remove_layer_by_name(f"Temporary_{self.selected_layer_name}")
+            self.remove_layer_by_name(f"Temporary_{self.selected_raster_layer_name}")
 
             # Refresh all layers to clear cached features
             QgsProject.instance().reloadAllLayers()
+
+            # Delete all temporary files
+            for temp_file in self.temporary_files:
+                if os.path.exists(temp_file):
+                    try:
+                        os.remove(temp_file)
+                    except Exception as e:
+                        QgsMessageLog.logMessage(f"Error deleting temp file {temp_file}: {str(e)}", 'AMRUT', Qgis.Warning)
+
+            
             self.refresh_map_canvas()
             QgsProject.instance().write()
-
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error during cleanup in closeEvent: {str(e)}", 'AMRUT', Qgis.Critical)
-
-        # Call the base class implementation to ensure proper closing
-        super().closeEvent(event)
+            QgsMessageLog.logMessage(f"Error in closeEvent cleanup: {str(e)}", 'AMRUT', Qgis.Critical)
+        finally:
+            super().closeEvent(event)
 
     def refresh_map_canvas(self):
         """Refresh the map canvas to ensure changes are visible."""
