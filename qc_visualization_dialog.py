@@ -33,7 +33,7 @@ class QualityCheckVisualizationDialog(QDialog):
         raster_layer = self.get_layer_by_name(self.selected_raster_layer_name) if self.selected_raster_layer_name else None
 
         if layer:
-            left_panel, self.left_map_canvas = self.create_layer_visualization_panel(layer, f"{self.selected_layer_name} from Project", raster_layer, 0)
+            left_panel, self.left_map_canvas = self.create_layer_visualization_panel(layer, f"{self.selected_layer_name} (Original Data)", raster_layer, 0)
         else:
             left_panel, self.left_map_canvas = self.create_error_panel(f"Layer '{self.selected_layer_name}' not found in the project."), None
         layout.addLayout(left_panel)
@@ -52,7 +52,7 @@ class QualityCheckVisualizationDialog(QDialog):
 
     def show_new_feature_dialog(self):
         try:
-            newFeatureFound = verification_dialog.VerificationDialog(self.selected_layer_name, self.selected_raster_layer_name)
+            newFeatureFound = verification_dialog.VerificationDialog(self.selected_layer_name, self.selected_raster_layer_name, self.grid_extent)
             newFeatureFound.check_for_new_features()
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in show_new_feature_dialog: {str(e)}", 'AMRUT', Qgis.Critical)
@@ -109,7 +109,7 @@ class QualityCheckVisualizationDialog(QDialog):
                 # Create and return the visualization panel
                 panel_layout, map_canvas = self.create_layer_visualization_panel(
                     geojson_layer,
-                    f"{self.selected_layer_name} from AMRUT File",
+                    f"{self.selected_layer_name} (Field Data)",
                     raster_layer,
                     called_for,
                 )
