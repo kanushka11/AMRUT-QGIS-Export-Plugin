@@ -12,6 +12,7 @@ import json
 
 class VerificationDialog:
     def __init__(self, selected_layer_name, selected_raster_layer_name, amrut_file_path, grid_extent):
+    def __init__(self, selected_layer_name, selected_raster_layer_name, amrut_file_path, grid_extent):
 
         # Fetch the layer based on its name
         self.selected_layer = self.get_layer_by_name(selected_layer_name)
@@ -241,7 +242,7 @@ class VerificationDialog:
                     f"Feature with feature_id {feature_id} not found in the .amrut file.",
                     "AMRUT",
                     Qgis.Warning
-                )
+                )            
 
     def zoom_to_feature_on_canvas(self, extent, canvas):
         """Zoom to the feature's bounding box on the canvas."""
@@ -298,7 +299,7 @@ class VerificationDialog:
 
     def set_colour_opacity(self, layer, opacity):
         """Set the opacity of the layer for visualization."""
-        symbol = layer.renderer().symbol()  # Get the symbol for the layer
+        symbol = layer.renderer().symbol()  # Get the symbol for the layer          
         if symbol:
             symbol.setOpacity(opacity)  # Set the opacity of the symbol
         layer.triggerRepaint()  # Trigger a repaint to apply the changes

@@ -1,8 +1,8 @@
 from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel
 from PyQt5.QtCore import Qt, QTimer
-from qgis.core import QgsProject, QgsVectorLayer, QgsCoordinateTransform, QgsRasterLayer, QgsProcessingFeedback, QgsProcessingContext, QgsMessageLog, Qgis
+from qgis.core import QgsProject, QgsVectorLayer, QgsCoordinateTransform, QgsRasterLayer, QgsProcessingFeedback, QgsProcessingContext, QgsMessageLog, Qgis, QgsPointXY
 from qgis.gui import QgsMapCanvas
-from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QColor, QMouseEvent
 from . import verification_dialog
 
 import zipfile
@@ -17,7 +17,8 @@ class QualityCheckVisualizationDialog(QDialog):
         self.amrut_file_path = amrut_file_path
         self.selected_raster_layer_name = selected_raster_layer_name
         self.grid_extent = grid_extent
-
+        self.temporary_files = []  # List to track temporary files
+        
         self.setWindowTitle("AMRUT 2.0")
         self.setWindowState(Qt.WindowMaximized)
 
@@ -52,7 +53,7 @@ class QualityCheckVisualizationDialog(QDialog):
 
     def show_new_feature_dialog(self):
         try:
-            newFeatureFound = verification_dialog.VerificationDialog(self.selected_layer_name, self.selected_raster_layer_name, self.grid_extent)
+            newFeatureFound = verification_dialog.VerificationDialog(self.selected_layer_name, self.selected_raster_layer_name, self.amrut_file_path, self.grid_extent)
             newFeatureFound.check_for_new_features()
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in show_new_feature_dialog: {str(e)}", 'AMRUT', Qgis.Critical)
@@ -71,8 +72,10 @@ class QualityCheckVisualizationDialog(QDialog):
         try:
             if not self.synchronizing:  # Prevent infinite loops
                 self.synchronizing = True
-                self.right_map_canvas.setExtent(self.left_map_canvas.extent())
-                self.right_map_canvas.refresh()
+                if self.left_map_canvas and self.right_map_canvas:
+                    self.right_map_canvas.setExtent(self.left_map_canvas.extent())
+                    self.right_map_canvas.refresh()
+                    self.refresh_canvas_layers(self.right_map_canvas)  # Refresh layers for the new extent
                 self.synchronizing = False
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in sync_extents_to_right: {str(e)}", 'AMRUT', Qgis.Critical)
@@ -82,11 +85,22 @@ class QualityCheckVisualizationDialog(QDialog):
         try:
             if not self.synchronizing:  # Prevent infinite loops
                 self.synchronizing = True
-                self.left_map_canvas.setExtent(self.right_map_canvas.extent())
-                self.left_map_canvas.refresh()
+                if self.left_map_canvas and self.right_map_canvas:
+                    self.left_map_canvas.setExtent(self.right_map_canvas.extent())
+                    self.left_map_canvas.refresh()
+                    self.refresh_canvas_layers(self.left_map_canvas)  # Refresh layers for the new extent
                 self.synchronizing = False
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in sync_extents_to_left: {str(e)}", 'AMRUT', Qgis.Critical)
+
+    def refresh_canvas_layers(self, canvas):
+        """Refresh all layers in the given canvas to load data for the current extent."""
+        try:
+            if canvas:
+                for layer in canvas.layers():
+                    layer.triggerRepaint()  # Reload and repaint the layer for the current extent
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error in refresh_canvas_layers: {str(e)}", 'AMRUT', Qgis.Critical)
 
     def create_geojson_visualization_panel(self, raster_layer, called_for):
         """Create a panel to visualize the GeoJSON extracted from the AMRUT file."""
@@ -140,6 +154,9 @@ class QualityCheckVisualizationDialog(QDialog):
                     with open(temp_geojson_file_path, 'w', encoding='utf-8') as temp_geojson_file:
                         temp_geojson_file.write(geojson_content)
 
+                    # Add the temporary file path to the list for cleanup
+                    self.temporary_files.append(temp_geojson_file_path)
+                    
                     # Load the GeoJSON into a vector layer using the temporary file path
                     geojson_layer = QgsVectorLayer(temp_geojson_file_path, layer_name, "ogr")
 
@@ -201,6 +218,7 @@ class QualityCheckVisualizationDialog(QDialog):
         """Create a map canvas to render the given layer."""
         try:
             existing_layer = None
+            reprojected_raster_layer = None
 
             if raster_layer and called_for == 0:
                 # Remove if a clipped and reprojected raster already exists
@@ -266,6 +284,10 @@ class QualityCheckVisualizationDialog(QDialog):
                     # Run the reprojection algorithm
                     reprojected_result = processing.run("gdal:warpreproject", reproject_params, context=processing_context, feedback=feedback)
 
+                    # Add the temporary raster file to the cleanup list
+                    temp_raster_path = reprojected_result['OUTPUT']
+                    self.temporary_files.append(temp_raster_path)
+
                     # Get the reprojected raster layer from the result
                     reprojected_raster_layer = QgsRasterLayer(reprojected_result['OUTPUT'], f"Temporary_{raster_layer.name()}")
 
@@ -276,20 +298,17 @@ class QualityCheckVisualizationDialog(QDialog):
                     # Add the reprojected raster layer to the project
                     QgsProject.instance().addMapLayer(reprojected_raster_layer)
 
-                # Set up the map canvas with layers
-                canvas = QgsMapCanvas()
-                canvas.setLayers([layer, reprojected_raster_layer])
-            else:
-                # No raster layer, just show the vector layer
-                canvas = QgsMapCanvas()
-                canvas.setLayers([layer])
+            # Set up the map canvas with layers
+            canvas = QgsMapCanvas()
+            canvas.setLayers([layer, reprojected_raster_layer])
 
             # Set extent and background color for canvas
             canvas.setExtent(self.grid_extent)
             canvas.setCanvasColor(QColor("white"))
 
-            # Enable map interactions (zoom and pan)
+            # Enable mouse tracking for panning
             canvas.setMouseTracking(True)
+            self.setup_mouse_tracking(canvas)
 
             canvas.refresh()  # Refresh the canvas to ensure proper visualization
 
@@ -297,6 +316,49 @@ class QualityCheckVisualizationDialog(QDialog):
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in create_map_canvas: {str(e)}", 'AMRUT', Qgis.Critical)
             return None
+        
+    def setup_mouse_tracking(self, canvas):
+        """Set up mouse tracking for panning."""
+        self.canvas = canvas
+        self.last_mouse_position = None
+
+        # Connect mouse events
+        self.canvas.mousePressEvent = self.mouse_press_event
+        self.canvas.mouseMoveEvent = self.mouse_move_event
+        self.canvas.mouseReleaseEvent = self.mouse_release_event
+
+    def mouse_press_event(self, event: QMouseEvent):
+        """Handle mouse press event for panning."""
+        if event.button() == Qt.LeftButton:
+            self.last_mouse_position = event.pos()
+
+    def mouse_move_event(self, event: QMouseEvent):
+        """Handle mouse move event for panning."""
+        if self.last_mouse_position is not None:
+            # Calculate delta in screen coordinates
+            current_mouse_position = event.pos()
+
+            # Convert mouse positions to map coordinates
+            start_map_point = self.canvas.getCoordinateTransform().toMapCoordinates(self.last_mouse_position)
+            end_map_point = self.canvas.getCoordinateTransform().toMapCoordinates(current_mouse_position)
+
+            # Calculate map delta
+            map_delta_x = start_map_point.x() - end_map_point.x()
+            map_delta_y = start_map_point.y() - end_map_point.y()
+
+            # Update the canvas center
+            current_center = self.canvas.center()
+            new_center = QgsPointXY(current_center.x() + map_delta_x, current_center.y() + map_delta_y)
+
+            self.canvas.setCenter(new_center)
+
+            # Update last mouse position
+            self.last_mouse_position = current_mouse_position
+
+    def mouse_release_event(self, event: QMouseEvent):
+        """Handle mouse release event."""
+        if event.button() == Qt.LeftButton:
+            self.last_mouse_position = None
 
     def create_error_panel(self, message):
         """Create a panel to display an error message."""
@@ -323,23 +385,28 @@ class QualityCheckVisualizationDialog(QDialog):
     def closeEvent(self, event):
         """Override closeEvent to remove temporary layers and refresh the map canvas."""
         try:
-            # Remove the temporary layers
-            temporary_selected_layer_name = f"Temporary_{self.selected_layer_name}"
-            temporary_raster_layer_name = f"Temporary_{self.selected_raster_layer_name}"
-
-            self.remove_layer_by_name(temporary_selected_layer_name)
-            self.remove_layer_by_name(temporary_raster_layer_name)
+            # Remove temporary layers
+            self.remove_layer_by_name(f"Temporary_{self.selected_layer_name}")
+            self.remove_layer_by_name(f"Temporary_{self.selected_raster_layer_name}")
 
             # Refresh all layers to clear cached features
             QgsProject.instance().reloadAllLayers()
+
+            # Delete all temporary files
+            for temp_file in self.temporary_files:
+                if os.path.exists(temp_file):
+                    try:
+                        os.remove(temp_file)
+                    except Exception as e:
+                        QgsMessageLog.logMessage(f"Error deleting temp file {temp_file}: {str(e)}", 'AMRUT', Qgis.Warning)
+
+            
             self.refresh_map_canvas()
             QgsProject.instance().write()
-
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error during cleanup in closeEvent: {str(e)}", 'AMRUT', Qgis.Critical)
-
-        # Call the base class implementation to ensure proper closing
-        super().closeEvent(event)
+            QgsMessageLog.logMessage(f"Error in closeEvent cleanup: {str(e)}", 'AMRUT', Qgis.Critical)
+        finally:
+            super().closeEvent(event)
 
     def refresh_map_canvas(self):
         """Refresh the map canvas to ensure changes are visible."""
