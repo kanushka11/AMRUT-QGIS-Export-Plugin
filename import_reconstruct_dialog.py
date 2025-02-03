@@ -26,7 +26,8 @@ from qgis.core import (
     QgsVectorLayer,
     QgsApplication
 )
-from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject, QThread
+from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject, QThread, Qt
+from PyQt5.QtGui import QPixmap
 from . import export_ui as ui
 from . import import_workers as workers
 from qgis.core import QgsProject, QgsMapLayer
@@ -56,9 +57,11 @@ class ReconstructLayerTabDialog(QDialog):
 
         # Create Tabs
         self.data_input_tab = self.create_data_input_tab()
+        self.layer_construction_tab = self.create_layer_construction_tab()
 
         # Add Tabs
         self.tabs.addTab(self.data_input_tab, "Data Selection")
+        self.tabs.addTab(self.layer_construction_tab, "Construct Layer")
 
 
         self.progress_bar = QProgressBar()
@@ -100,6 +103,9 @@ class ReconstructLayerTabDialog(QDialog):
             self.amrut_files = data[0]
             self.layers_map = data[1]
             self.tabs.setCurrentIndex(layer_reconstruction_tab_index)
+            print(f"Layers : {self.layers_map}")
+            self.show_layers()
+
         else:
             error_msg = data
             self.show_error(error_msg)
@@ -138,8 +144,26 @@ class ReconstructLayerTabDialog(QDialog):
         return tab
 
 
+    def create_layer_construction_tab (self) :
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(10, 10, 10, 10)
+
+        information_label = QLabel("Layers available to Re-Construct")
+
+
+        return tab
+
+
 
     """U T L I T Y      M E T H O D S"""
+    def show_layers(self):
+        layers_name = list(self.layers_map.keys())
+        print(f"Layout {layers_name}")
+        layout = QVBoxLayout(self.layer_construction_tab)
+        layer_list = self.LayerList(layers_name, parent= layout)
+        layer_list.add_to_parent()
+        print(f"Layout {layer_list}")
 
     def select_data_directory(self):
         """Opens a dialog to select the output directory."""
@@ -184,9 +208,67 @@ class ReconstructLayerTabDialog(QDialog):
         self.progress_bar.setRange(0, 100)  # Reset progress bar range
         self.progress_lable.setText("")
         QMessageBox.information(self, title, message)
-        QgsMessageLog.logMessage(str(error), 'AMRUT', Qgis.Critical)
 
     class CustomTabBar(QTabBar):
         def mousePressEvent(self, event):
             # Override the mousePressEvent to ignore clicks
             pass
+
+    class LayerItem(QWidget):
+        def __init__(self, layer_name, parent=None):
+            super().__init__(parent)
+
+            self.layer_name = layer_name
+            self.status = "pending"  # Default status
+
+            # Create layout
+            layout = QHBoxLayout(self)
+
+            # Layer name label
+            self.name_label = QLabel(layer_name)
+            layout.addWidget(self.name_label)
+
+            # Process button
+            self.process_button = QPushButton("Process")
+            self.process_button.clicked.connect(self.process_layer)
+            layout.addWidget(self.process_button)
+
+            # Status icon
+            self.status_icon = QLabel()
+            self.update_status_icon()
+            layout.addWidget(self.status_icon)
+
+            self.setLayout(layout)
+
+        def process_layer(self):
+            """Simulate processing and update status"""
+            self.status = "processed"
+            self.update_status_icon()
+
+        def update_status_icon(self):
+            """Update the symbol based on status"""
+            if self.status == "pending":
+                pixmap = QPixmap(20, 20)
+                pixmap.fill(Qt.red)  # Red for pending
+            else:
+                pixmap = QPixmap(20, 20)
+                pixmap.fill(Qt.green)  # Green for processed
+
+            self.status_icon.setPixmap(pixmap)
+
+    class LayerList(QWidget):
+        def __init__(self, layers, parent):
+            super().__init__(None)
+            self.layout = QVBoxLayout(self)
+            self.parent = parent
+
+            self.layer_items = []
+
+            for layer in layers:
+                item = ReconstructLayerTabDialog.LayerItem(layer)
+                self.layout.addWidget(item)
+                self.layer_items.append(item)
+
+
+        def add_to_parent(self):
+            self.parent.addLayout(self.layout)

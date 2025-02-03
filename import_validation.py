@@ -38,9 +38,14 @@ def validate_amrut_files(directory):
                     return False, f"{amrut_file} is not verified"
 
                 # Read layers and extract layer names
-                layers = metadata.get("layers", [])
-                for layer in layers:
-                    layer_name = next(iter(layer))  # Extracting layer_name
-                    layer_map[layer_name] = layer[layer_name]  # Storing geometry info
+                layers_qc_completed = metadata.get("layers_qc_completed", [])
+
+                if not layers_qc_completed:
+                    return False, f"No completed QC layers found in {amrut_file}"
+
+                # Store completed layers in the map
+                for layer_name in layers_qc_completed:
+                    layer_map[layer_name] = "Processed"
+
 
     return True, (amrut_files, layer_map)  # Successfully validated, return layer map
