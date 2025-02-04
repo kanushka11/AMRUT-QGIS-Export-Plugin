@@ -30,10 +30,16 @@ from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject, QThread, Q
 from PyQt5.QtGui import QPixmap
 from . import export_ui as ui
 from . import import_workers as workers
+from . import import_process_layer as process, import_construct_layer as construct
 from qgis.core import QgsProject, QgsMapLayer
+import os
+import sip
+
+
 
 data_selection_tab_index = 0
 layer_reconstruction_tab_index = 1
+
 
 
 class ReconstructLayerTabDialog(QDialog):
@@ -43,6 +49,7 @@ class ReconstructLayerTabDialog(QDialog):
         self.iface = iface
         self.setWindowTitle("Sankalan 2.0")
         self.setMinimumSize(700, 500)
+        self.processing_layer = False
 
         # Main layout
         layout = QVBoxLayout(self)
@@ -57,11 +64,11 @@ class ReconstructLayerTabDialog(QDialog):
 
         # Create Tabs
         self.data_input_tab = self.create_data_input_tab()
-        self.layer_construction_tab = self.create_layer_construction_tab()
+
 
         # Add Tabs
         self.tabs.addTab(self.data_input_tab, "Data Selection")
-        self.tabs.addTab(self.layer_construction_tab, "Construct Layer")
+
 
 
         self.progress_bar = QProgressBar()
@@ -83,34 +90,80 @@ class ReconstructLayerTabDialog(QDialog):
             if hasattr(self, "data_dir"):
                 self.progress_lable.setText("Validating Data...")
                 self.progress_bar.setRange(0,0)
-                self.data_validation_worker = workers.AmrutFilesValidationWorker(self.data_dir)
+                self.layer_construction_worker = workers.AmrutFilesValidationWorker(self.data_dir)
                 self.thread = QThread()
-                self.data_validation_worker.moveToThread(self.thread)
-                self.thread.started.connect(self.data_validation_worker.run)
-                self.data_validation_worker.finished.connect(self.thread.quit)
-                self.data_validation_worker.finished.connect(self.data_validation_worker.deleteLater)
+                self.layer_construction_worker.moveToThread(self.thread)
+                self.thread.started.connect(self.layer_construction_worker.run)
+                self.layer_construction_worker.finished.connect(self.thread.quit)
+                self.layer_construction_worker.finished.connect(self.layer_construction_worker.deleteLater)
                 self.thread.finished.connect(self.thread.deleteLater)
-                self.data_validation_worker.result_signal.connect(self.data_validation_result)
+                self.layer_construction_worker.result_signal.connect(self.data_validation_result)
                 self.thread.start()
             else :
                 self.show_error("No directory selected")
 
+    def closeEvent(self, event):
+        """Handle cleanup on dialog close."""
+        # Stop all running threads
+        if hasattr(self, 'thread') and self.thread:
+            if not sip.isdeleted(self.thread):  # Check if the thread is already deleted
+                if self.thread.isRunning():
+                    self.thread.quit()
+                    self.thread.wait()
+
+        event.accept()  # Allow the dialog to close
 
     """R E S U L T S    H A N D L I N G"""
+
     def data_validation_result (self, result, data) :
         if result :
             self.show_success("Validation", "All AMRUT files are valid")
             self.amrut_files = data[0]
             self.layers_map = data[1]
+            self.layer_construction_tab = self.create_layer_construction_tab()
+            self.tabs.addTab(self.layer_construction_tab, "Construct Layer")
             self.tabs.setCurrentIndex(layer_reconstruction_tab_index)
             print(f"Layers : {self.layers_map}")
-            self.show_layers()
 
         else:
             error_msg = data
             self.show_error(error_msg)
-    """T A B S      L A Y O U T"""
+    def layer_construction_result (self, result, data) :
+        if result :
+            self.show_success("Layer", f"Layer successfully re-constructed and saved at {data}")
+            self.processing_layer = False
+        else :
+            self.show_error(data)
+            self.processing_layer = False
 
+
+    """P R O C E S S    L A Y E R S"""
+    def process_layer (self, layer_name) :
+        print(f"Layer to process : {layer_name}")
+        if not self.processing_layer :
+            self.processing_layer = True
+            is_in_temporary_stage = self.is_layer_in_temporary_stage(layer_name)
+            if is_in_temporary_stage :
+                print(f"Temp layer found for  : {layer_name}")
+                process.process_temp_layer(layer_name)
+            else:
+                print(f"Temp layer NOT found for  : {layer_name}, Construction layer")
+                self.progress_lable.setText("Constructing Layer...")
+                self.progress_bar.setRange(0, 0)
+                self.layer_construction_worker = workers.LayerConstructionWorker(self.amrut_files, layer_name)
+                self.thread = QThread()
+                self.layer_construction_worker.moveToThread(self.thread)
+                self.thread.started.connect(self.layer_construction_worker.run)
+                self.layer_construction_worker.finished.connect(self.thread.quit)
+                self.layer_construction_worker.finished.connect(self.layer_construction_worker.deleteLater)
+                self.thread.finished.connect(self.thread.deleteLater)
+                self.layer_construction_worker.result_signal.connect(self.layer_construction_result)
+                self.thread.start()
+
+
+
+
+    """T A B S      L A Y O U T"""
     def create_data_input_tab(self):
         tab = QWidget()
         layout = QVBoxLayout(tab)
@@ -147,23 +200,25 @@ class ReconstructLayerTabDialog(QDialog):
     def create_layer_construction_tab (self) :
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        layout.setContentsMargins(10, 10, 10, 10)
-
+        layout.setContentsMargins(2, 2, 2, 2)
         information_label = QLabel("Layers available to Re-Construct")
+        layout.addWidget(information_label, alignment=Qt.AlignTop)
+        layers_name = list(self.layers_map.keys())
+        layers_layout = QVBoxLayout()
 
+        for layer in layers_name :
+            layers_layout.addLayout(self.get_layer_layout(layer))  # Get the layout
+
+        layers_widget = QWidget()
+        layers_widget.setLayout(layers_layout)
+        layout.addWidget(layers_widget, alignment=Qt.AlignTop)
 
         return tab
 
 
 
     """U T L I T Y      M E T H O D S"""
-    def show_layers(self):
-        layers_name = list(self.layers_map.keys())
-        print(f"Layout {layers_name}")
-        layout = QVBoxLayout(self.layer_construction_tab)
-        layer_list = self.LayerList(layers_name, parent= layout)
-        layer_list.add_to_parent()
-        print(f"Layout {layer_list}")
+
 
     def select_data_directory(self):
         """Opens a dialog to select the output directory."""
@@ -213,6 +268,44 @@ class ReconstructLayerTabDialog(QDialog):
         def mousePressEvent(self, event):
             # Override the mousePressEvent to ignore clicks
             pass
+
+    def get_layer_layout (self, layer_name):
+        layout = QHBoxLayout(self)
+        name_label = QLabel(layer_name)
+        status_icon = QLabel()
+        process_button = QPushButton("Process")
+
+        layer_status_processed = self.get_layer_status(layer_name)
+        if layer_status_processed :
+            pixmap = ui.get_checked_icon()
+        else:
+            pixmap = ui.get_warning_icon()
+        status_icon.setPixmap(pixmap)
+        process_button.clicked.connect(lambda: self.process_layer(layer_name))
+
+        layout.addWidget(name_label)
+        layout.addWidget(process_button)
+        layout.addWidget(status_icon)
+        return layout
+
+    def get_layer_status( self,layer_name):
+        """Update the symbol based on status"""
+        processed = False
+        processed_layer_name = f"{layer_name}_vetted"
+        for layer in QgsProject.instance().mapLayers().values():
+            if layer.name() == processed_layer_name:
+                processed = True
+
+        return processed
+    def is_layer_in_temporary_stage (self, layer_name) :
+        print(f"Checking for Temporary layer for {layer_name} layer")
+        temporary = False
+        temporary_layer_name = f"Temporary_{layer_name}"
+        for layer in QgsProject.instance().mapLayers().values():
+            if layer.name() == temporary_layer_name:
+                temporary = True
+
+        return temporary
 
     class LayerItem(QWidget):
         def __init__(self, layer_name, parent=None):
@@ -270,5 +363,5 @@ class ReconstructLayerTabDialog(QDialog):
                 self.layer_items.append(item)
 
 
-        def add_to_parent(self):
-            self.parent.addLayout(self.layout)
+        def get_layout(self):
+            return self.layout

@@ -236,3 +236,26 @@ def showErrorDialog(message) :
     layout.addWidget(message)
     layout.addWidget(close)
     dialog.exec_()
+def get_warning_icon () :
+    pwd = os.path.dirname(os.path.abspath(__file__))
+    assets_dir = os.path.join(pwd, "assets")
+    warning_name = "warning.png"
+
+    warning_logo_path = os.path.join(assets_dir, warning_name)
+    logo_size = (24, 24)
+    warning_logo = QPixmap(warning_logo_path).scaled(logo_size[0], logo_size[1], Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    return warning_logo
+
+
+def get_checked_icon():
+    pwd = os.path.dirname(os.path.abspath(__file__))
+    assets_dir = os.path.join(pwd, "assets")
+    checked_name = "checked.png"
+
+    checked_logo_path = os.path.join(assets_dir, checked_name)
+    logo_size = (24, 24)
+    checked_logo = QPixmap(checked_logo_path).scaled(logo_size[0], logo_size[1], Qt.KeepAspectRatio,Qt.SmoothTransformation)
+    return checked_logo
+
+
+
