@@ -182,6 +182,11 @@ class ImportDialog(QDialog):
 
                 metadata = json.loads(zip_ref.read('metadata.json'))
 
+                if metadata.get("qc_status") == "verified":
+                    QMessageBox.information(self, "File Already Verified", "This file has already been verified.")
+                    self.file_input.clear()
+                    return
+                
                 # Check for layers in metadata
                 if 'layers' not in metadata or not isinstance(metadata['layers'], list):
                     QMessageBox.warning(self, "Invalid Metadata", "'layers' array is missing or invalid in metadata.json.")
@@ -307,11 +312,10 @@ class ImportDialog(QDialog):
 
             qualityCheckVisualizationDialog.exec_()
 
-            # Clear selected file and dropdown selections
             self.file_input.clear()
             self.layer_dropdown.clear()
             self.layer_dropdown.addItem("Select any layer for Quality Check")
             self.layer_dropdown.model().item(0).setEnabled(False)
-            self.raster_layer_dropdown.setCurrentIndex(0)  # Reset raster dropdown
+            self.raster_layer_dropdown.setCurrentIndex(0)
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in proceed_quality_check: {str(e)}", 'AMRUT', Qgis.Critical)

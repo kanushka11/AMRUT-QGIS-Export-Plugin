@@ -12,7 +12,6 @@ import json
 
 class VerificationDialog:
     def __init__(self, selected_layer_name, selected_raster_layer_name, amrut_file_path, grid_extent):
-
         # Fetch the layer based on its name
         self.selected_layer = self.get_layer_by_name(selected_layer_name)
         self.selected_raster_layer = self.get_layer_by_name(f"Temporary_{selected_raster_layer_name}")
@@ -348,29 +347,22 @@ class VerificationDialog:
         dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowSystemMenuHint)
         layout = QVBoxLayout(dialog)  # Use a vertical layout for the dialog
 
-        message_label = QLabel("Do you want to accept the layer from Field Data?")
+        message_label = QLabel("All changes have been processed. Save the changes to AMRUT File?")
         message_label.setAlignment(Qt.AlignCenter)  # Center-align the message text
         message_label.setStyleSheet("font-size: 12px; font-weight: bold;")  # Set font size and bold style
         layout.addWidget(message_label)  # Add the label to the layout
         button_layout = QHBoxLayout()
-        on_hold_button = QPushButton("On Hold Vetted Data") 
         accept_button = QPushButton("Accept Vetted Data")
         # Modify the width of the buttons
         accept_button.setFixedWidth(120)  # Set a fixed width for the accept button
-        on_hold_button.setFixedWidth(120)  # Set a fixed width for the reject button
 
         # Modify the color of the buttons
         accept_button.setStyleSheet("background-color: green; color: black;")
-        on_hold_button.setStyleSheet("background-color: yellow; color: black;")
         accept_button.setCursor(Qt.PointingHandCursor)
-        on_hold_button.setCursor(Qt.PointingHandCursor)
         button_layout.addWidget(accept_button)  # Add the accept button to the layout
-        button_layout.addWidget(on_hold_button)  # Add the reject button to the layout
         layout.addLayout(button_layout)  # Add the button layout to the main layout
 
         accept_button.clicked.connect(lambda: self.close_dialog_and_execute(dialog, self.accept_data))
-        on_hold_button.clicked.connect(lambda: self.close_dialog_and_execute(dialog, self.on_hold_data))
-        
         dialog.exec_()  # Display the dialog
 
     def accept_data(self):
@@ -380,13 +372,14 @@ class VerificationDialog:
             geojson_filename = f"{self.selected_layer.name()}.geojson"
             geojson_name_without_ext = os.path.splitext(geojson_filename)[0]
 
+
             # Create a temporary directory for extraction
             temp_dir = tempfile.mkdtemp()
+
 
             # Extract the contents of the .amrut file to the temporary directory
             with zipfile.ZipFile(self.amrut_file_path, 'r') as zip_ref:
                 zip_ref.extractall(temp_dir)
-
                 # Read metadata.json from the archive
                 metadata = json.loads(zip_ref.read('metadata.json'))
 
@@ -410,11 +403,10 @@ class VerificationDialog:
                 if geojson_name_without_ext not in metadata["layers_qc_completed"]:
                     metadata["layers_qc_completed"].append(geojson_name_without_ext)
 
+                qc_status = None
+                
                 # Check if all layers are in 'layers_qc_completed'
                 all_verified = all(layer in metadata["layers_qc_completed"] for layer in layer_names)
-               
-                qc_status = None
-
                 # Update the qc_status field
                 if all_verified:
                     qc_status = "verified"
@@ -459,16 +451,19 @@ class VerificationDialog:
 
             # Replace the original .amrut file with the updated one
             os.replace(temp_amrut_path, self.amrut_file_path)
+            QgsMessageLog.logMessage(
+                f"GeoJSON file '{geojson_filename}' successfully replaced in the AMRUT file. QC Status: {qc_status}",
+                "AMRUT",
+                Qgis.Info
+            )
+
+            if all_verified:
+                QMessageBox.information(None, "File Verified", "All layers of this file has been verified.")
+            
         except Exception as e:
             QgsMessageLog.logMessage(f"Error replacing GeoJSON in AMRUT file: {str(e)}", "AMRUT", Qgis.Critical)
         finally:
             # Cleanup: Delete the temporary directory
             if temp_dir and os.path.exists(temp_dir):
-                try:
-                    shutil.rmtree(temp_dir)
-                except Exception as e:
-                        QgsMessageLog.logMessage(f"Error deleting temp file {temp_dir}: {str(e)}", 'AMRUT', Qgis.Warning)
-                
-    def on_hold_data(self):
-        return
-    
+                shutil.rmtree(temp_dir)
+
