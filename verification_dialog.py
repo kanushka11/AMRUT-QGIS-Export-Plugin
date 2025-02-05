@@ -347,28 +347,22 @@ class VerificationDialog:
         dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowSystemMenuHint)
         layout = QVBoxLayout(dialog)  # Use a vertical layout for the dialog
 
-        message_label = QLabel("Do you want to accept the layer from Field Data?")
+        message_label = QLabel("All changes have been processed. Save the changes to AMRUT File?")
         message_label.setAlignment(Qt.AlignCenter)  # Center-align the message text
         message_label.setStyleSheet("font-size: 12px; font-weight: bold;")  # Set font size and bold style
         layout.addWidget(message_label)  # Add the label to the layout
         button_layout = QHBoxLayout()
-        on_hold_button = QPushButton("On Hold Vetted Data") 
         accept_button = QPushButton("Accept Vetted Data")
         # Modify the width of the buttons
         accept_button.setFixedWidth(120)  # Set a fixed width for the accept button
-        on_hold_button.setFixedWidth(120)  # Set a fixed width for the reject button
 
         # Modify the color of the buttons
         accept_button.setStyleSheet("background-color: green; color: black;")
-        on_hold_button.setStyleSheet("background-color: yellow; color: black;")
         accept_button.setCursor(Qt.PointingHandCursor)
-        on_hold_button.setCursor(Qt.PointingHandCursor)
         button_layout.addWidget(accept_button)  # Add the accept button to the layout
-        button_layout.addWidget(on_hold_button)  # Add the reject button to the layout
         layout.addLayout(button_layout)  # Add the button layout to the main layout
 
         accept_button.clicked.connect(lambda: self.close_dialog_and_execute(dialog, self.accept_data))
-        on_hold_button.clicked.connect(lambda: self.close_dialog_and_execute(dialog, self.on_hold_data))
         dialog.exec_()  # Display the dialog
 
     def accept_data(self):
@@ -415,7 +409,7 @@ class VerificationDialog:
                 all_verified = all(layer in metadata["layers_qc_completed"] for layer in layer_names)
                 # Update the qc_status field
                 if all_verified:
-                    qc_status = "Verified"
+                    qc_status = "verified"
 
             # Check if the GeoJSON file exists in the archive
             geojson_file_path = os.path.join(temp_dir, geojson_filename)
@@ -442,7 +436,7 @@ class VerificationDialog:
             # Write the updated metadata.json back to the temporary directory
             metadata_path = os.path.join(temp_dir, "metadata.json")
             with open(metadata_path, "w") as metadata_file:
-                if not qc_status:
+                if qc_status != None:
                     metadata["qc_status"] = qc_status  # Update QC status
                 json.dump(metadata, metadata_file, indent=4)
 
@@ -462,6 +456,10 @@ class VerificationDialog:
                 "AMRUT",
                 Qgis.Info
             )
+
+            if all_verified:
+                QMessageBox.information(None, "File Verified", "All layers of this file has been verified.")
+            
         except Exception as e:
             QgsMessageLog.logMessage(
                 f"Error replacing GeoJSON in AMRUT file: {str(e)}",
@@ -472,7 +470,4 @@ class VerificationDialog:
             # Cleanup: Delete the temporary directory
             if temp_dir and os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir)
-
-    def on_hold_data(self):
-        return
 
