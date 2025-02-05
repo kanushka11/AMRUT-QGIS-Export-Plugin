@@ -35,6 +35,7 @@ class QualityCheckVisualizationDialog(QDialog):
 
         if layer:
             left_panel, self.left_map_canvas = self.create_layer_visualization_panel(layer, f"{self.selected_layer_name} (Original Data)", raster_layer, 0)
+            left_panel, self.left_map_canvas = self.create_layer_visualization_panel(layer, f"{self.selected_layer_name} (Original Data)", raster_layer, 0)
         else:
             left_panel, self.left_map_canvas = self.create_error_panel(f"Layer '{self.selected_layer_name}' not found in the project."), None
         layout.addLayout(left_panel)
@@ -399,7 +400,6 @@ class QualityCheckVisualizationDialog(QDialog):
                         os.remove(temp_file)
                     except Exception as e:
                         QgsMessageLog.logMessage(f"Error deleting temp file {temp_file}: {str(e)}", 'AMRUT', Qgis.Warning)
-
             
             self.refresh_map_canvas()
             QgsProject.instance().write()
