@@ -95,7 +95,7 @@ class VerificationDialog:
             layout.addLayout(button_layout)  # Add the button layout to the main layout
             proceed_button.clicked.connect(lambda: self.show_verification_dialog(dialog, feature_ids)) # Connect the button click event to open the verification dialog
         else:
-            proceed_button = QPushButton("Ok")  # Create the button
+            proceed_button = QPushButton("OK")  # Create the button
             button_layout.addWidget(proceed_button, alignment=Qt.AlignCenter)  # Add button to the layout
             proceed_button.setFixedWidth(75)  # Set a fixed width for the button
             layout.addLayout(button_layout)  # Add the button layout to the main layout
@@ -461,11 +461,7 @@ class VerificationDialog:
                 QMessageBox.information(None, "File Verified", "All layers of this file has been verified.")
             
         except Exception as e:
-            QgsMessageLog.logMessage(
-                f"Error replacing GeoJSON in AMRUT file: {str(e)}",
-                "AMRUT",
-                Qgis.Critical
-            )
+            QgsMessageLog.logMessage(f"Error replacing GeoJSON in AMRUT file: {str(e)}", "AMRUT", Qgis.Critical)
         finally:
             # Cleanup: Delete the temporary directory
             if temp_dir and os.path.exists(temp_dir):
