@@ -90,14 +90,14 @@ class ReconstructLayerTabDialog(QDialog):
             if hasattr(self, "data_dir"):
                 self.progress_lable.setText("Validating Data...")
                 self.progress_bar.setRange(0,0)
-                self.layer_construction_worker = workers.AmrutFilesValidationWorker(self.data_dir)
+                self.data_validation_worker = workers.AmrutFilesValidationWorker(self.data_dir)
                 self.thread = QThread()
-                self.layer_construction_worker.moveToThread(self.thread)
-                self.thread.started.connect(self.layer_construction_worker.run)
-                self.layer_construction_worker.finished.connect(self.thread.quit)
-                self.layer_construction_worker.finished.connect(self.layer_construction_worker.deleteLater)
+                self.data_validation_worker.moveToThread(self.thread)
+                self.thread.started.connect(self.data_validation_worker.run)
+                self.data_validation_worker.finished.connect(self.thread.quit)
+                self.data_validation_worker.finished.connect(self.data_validation_worker.deleteLater)
                 self.thread.finished.connect(self.thread.deleteLater)
-                self.layer_construction_worker.result_signal.connect(self.data_validation_result)
+                self.data_validation_worker.result_signal.connect(self.data_validation_result)
                 self.thread.start()
             else :
                 self.show_error("No directory selected")
@@ -110,6 +110,11 @@ class ReconstructLayerTabDialog(QDialog):
                 if self.thread.isRunning():
                     self.thread.quit()
                     self.thread.wait()
+        if hasattr(self, 'layer_thread') and self.layer_thread:
+            if not sip.isdeleted(self.layer_thread):  # Check if the thread is already deleted
+                if self.layer_thread.isRunning():
+                    self.layer_thread.quit()
+                    self.layer_thread.wait()
 
         event.accept()  # Allow the dialog to close
 
@@ -131,36 +136,60 @@ class ReconstructLayerTabDialog(QDialog):
     def layer_construction_result (self, result, data) :
         if result :
             self.show_success("Layer", f"Layer successfully re-constructed and saved at {data}")
-            self.processing_layer = False
+            temporary_layer_name = f"Temporary_{self.selected_layer_for_processing}"
+            saved_temp_layer = QgsVectorLayer(data, temporary_layer_name, "ogr")
+            QgsProject.instance().addMapLayer(saved_temp_layer)
+            self.compare_changes()
+
         else :
             self.show_error(data)
             self.processing_layer = False
 
+    def compare_changes_result(self, result, data):
+        if result :
+            if len(data) == 0 :
+                self.show_success("Layer", "All changes processed")
+                self.processing_layer = False
+        else :
+            self.show_error(data)
+            self.processing_layer = False
 
-    """P R O C E S S    L A Y E R S"""
-    def process_layer (self, layer_name) :
-        print(f"Layer to process : {layer_name}")
+    """C O N S T R U C T    L A Y E R S"""
+    def construct_layer (self, layer_name) :
         if not self.processing_layer :
             self.processing_layer = True
+            self.selected_layer_for_processing = layer_name
             is_in_temporary_stage = self.is_layer_in_temporary_stage(layer_name)
             if is_in_temporary_stage :
-                print(f"Temp layer found for  : {layer_name}")
                 process.process_temp_layer(layer_name)
             else:
-                print(f"Temp layer NOT found for  : {layer_name}, Construction layer")
-                self.progress_lable.setText("Constructing Layer...")
-                self.progress_bar.setRange(0, 0)
-                self.layer_construction_worker = workers.LayerConstructionWorker(self.amrut_files, layer_name)
-                self.thread = QThread()
-                self.layer_construction_worker.moveToThread(self.thread)
-                self.thread.started.connect(self.layer_construction_worker.run)
-                self.layer_construction_worker.finished.connect(self.thread.quit)
-                self.layer_construction_worker.finished.connect(self.layer_construction_worker.deleteLater)
-                self.thread.finished.connect(self.thread.deleteLater)
-                self.layer_construction_worker.result_signal.connect(self.layer_construction_result)
-                self.thread.start()
+                try :
+                    self.progress_lable.setText("Constructing Layer...")
+                    self.progress_bar.setRange(0, 0)
+                    self.layer_construction_worker = workers.LayerConstructionWorker(self.data_dir, self.amrut_files,
+                                                                                   layer_name)
+                    self.layer_thread = QThread()
+                    self.layer_construction_worker.moveToThread(self.layer_thread)
+                    self.layer_thread.started.connect(self.layer_construction_worker.run)
+                    self.layer_construction_worker.finished.connect(self.layer_thread.quit)
+                    self.layer_construction_worker.finished.connect(self.layer_construction_worker.deleteLater)
+                    self.layer_thread.finished.connect(self.layer_thread.deleteLater)
+                    self.layer_construction_worker.result_signal.connect(self.layer_construction_result)
+                    self.layer_thread.start()
+                except Exception as e :
+                    raise Exception (str(e))
 
-
+    def compare_changes(self):
+        self.progress_lable.setText("Comparing Changes...")
+        self.compare_changes_worker = workers.CompareChangesWorker(self.selected_layer_for_processing)
+        self.compare_changes_thread = QThread()
+        self.compare_changes_worker.moveToThread(self.compare_changes_thread)
+        self.compare_changes_thread.started.connect(self.compare_changes_worker.run)
+        self.compare_changes_worker.finished.connect(self.compare_changes_thread.quit)
+        self.compare_changes_worker.finished.connect(self.compare_changes_worker.deleteLater)
+        self.compare_changes_thread.finished.connect(self.compare_changes_thread.deleteLater)
+        self.compare_changes_worker.result_signal.connect(self.compare_changes_result)
+        self.compare_changes_thread.start()
 
 
     """T A B S      L A Y O U T"""
@@ -281,7 +310,7 @@ class ReconstructLayerTabDialog(QDialog):
         else:
             pixmap = ui.get_warning_icon()
         status_icon.setPixmap(pixmap)
-        process_button.clicked.connect(lambda: self.process_layer(layer_name))
+        process_button.clicked.connect(lambda: self.construct_layer(layer_name))
 
         layout.addWidget(name_label)
         layout.addWidget(process_button)

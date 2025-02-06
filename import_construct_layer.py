@@ -14,11 +14,14 @@ import os
 import zipfile
 import json
 import tempfile
+import processing
 
 merged_layer = None
 
-def construct_layer(amrut_files, layer_name):
+def construct_layer(directory, amrut_files, layer_name):
+    global merged_layer
     init_merged_layer(layer_name)
+    layers_to_merge = []
 
     for amrut_file in amrut_files:
         amrut_path = os.path.join(directory, amrut_file)
@@ -30,7 +33,7 @@ def construct_layer(amrut_files, layer_name):
             if  layer_file_name not in zip_ref.namelist():
                 return False, f"Layer not found in {amrut_file}"
 
-            geojson_data = zip_ref.read(geojson_filename).decode('utf-8')
+            geojson_data = zip_ref.read(layer_file_name).decode('utf-8')
             temp_dir = tempfile.gettempdir()
             temp_geojson_file_path = os.path.join(temp_dir, f"Temporary_{layer_file_name}")
             print(f"Reading layer from mobile : {temp_geojson_file_path}")
@@ -39,10 +42,12 @@ def construct_layer(amrut_files, layer_name):
                 temp_geojson_file.write(geojson_data)
 
             geojson_layer = QgsVectorLayer(temp_geojson_file_path, layer_name, "ogr")
-            copy_features_and_update_extent(geojson_layer)
+            layers_to_merge.append(geojson_layer)
 
 
+    merge_layers(layers_to_merge)
     saved_layer_path = save_temporary_layer(layer_name)
+    print(f"Merged layer feature count: {merged_layer.featureCount()}")
 
 
     return True, saved_layer_path  # Successfully validated, return layer map
@@ -59,34 +64,22 @@ def init_merged_layer(layer_name) :
     layer_uri = f"{geometry_str}?crs={crs.authid()}"
     merged_layer = QgsVectorLayer(layer_uri, f"Temporary_{layer_name}", "memory")
 
-
-
-def copy_features_and_update_extent(geojson_layer):
+def merge_layers(layers_to_merge):
     global merged_layer
-    print(f"Copying features to  {merged_layer}")
-    if geojson_layer.crs() != merged_layer.crs():
-         raise Exception ("CRS mismatch! Cannot copy features.")
-
-    # Start editing the merged layer
-    merged_layer.startEditing()
-
-    # Copy features from geojson_layer to merged_layer
-    for feature in geojson_layer.getFeatures():
-        new_feature = QgsFeature()
-        new_feature.setGeometry(feature.geometry())  # Copy geometry
-        new_feature.setAttributes(feature.attributes())  # Copy attributes
-        merged_layer.addFeature(new_feature)
-
-    # Commit changes to the merged layer
-    merged_layer.commitChanges()
-    merged_layer.updateExtents()
-
+    parameters = {
+        'LAYERS': layers_to_merge,
+        'CRS': QgsCoordinateReferenceSystem("EPSG:4326"),
+        'OUTPUT': 'memory:'  # Keep it in memory
+    }
+    merged_layer = processing.run("native:mergevectorlayers", parameters)['OUTPUT']
+    if not merged_layer or not merged_layer.isValid():
+        raise Exception("Merging layers failed.")
 
 
 def save_temporary_layer(layer_name):
-
+    global merged_layer
     project_path = QgsProject.instance().homePath()  # Gets the root project directory
-    temporary_layer_path = os.path.join(project_path, f"Temporary_{layer_name}.gpkg")
+    temporary_layer_path = os.path.join(project_path, f"{layer_name}_vetted.gpkg")
     save_file_to_disk(temporary_layer_path, merged_layer)
 
     return temporary_layer_path
