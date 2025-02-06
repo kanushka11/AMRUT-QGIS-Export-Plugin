@@ -21,11 +21,11 @@ class ImportDialog(QDialog):
 
     def reconstruct_or_qc_dialog(self):
         """Main dialog to choose between reconstructing a layer or performing a quality check"""
-        dialog = self.create_dialog("AMRUT 2.0", 350, 200)
+        dialog = self.create_dialog("AMRUT 2.0", 500, 250)
         layout = QVBoxLayout(dialog)
 
         # Add logo layout
-        logo_layout = ui.createLogoLayout("Sankalan 2.0")
+        logo_layout = ui.createLogoLayout("SANKALAN 2.0", "Data From Mobile")
         layout.addLayout(logo_layout)
 
         # Add buttons for "Reconstruct Layer" and "Quality Check"
@@ -39,6 +39,8 @@ class ImportDialog(QDialog):
             "Quality Check", 
             lambda: self._open_dialog(dialog, self.quality_check_dialog)
         )
+        footer_note = ui.get_footer_note()
+        layout.addWidget(footer_note, alignment=Qt.AlignCenter)
 
         dialog.exec_()
 
