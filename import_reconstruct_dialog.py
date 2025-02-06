@@ -24,7 +24,8 @@ from qgis.core import (
     QgsMessageLog,
     Qgis,
     QgsVectorLayer,
-    QgsApplication
+    QgsApplication,
+    QgsProcessingFeatureSourceDefinition
 )
 from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject, QThread, Qt
 from PyQt5.QtGui import QPixmap
@@ -34,6 +35,7 @@ from . import import_process_layer as process, import_construct_layer as constru
 from qgis.core import QgsProject, QgsMapLayer
 import os
 import sip
+import processing
 
 
 
@@ -137,8 +139,8 @@ class ReconstructLayerTabDialog(QDialog):
         if result :
             self.show_success("Layer", f"Layer successfully re-constructed and saved at {data}")
             temporary_layer_name = f"Temporary_{self.selected_layer_for_processing}"
-            saved_temp_layer = QgsVectorLayer(data, temporary_layer_name, "ogr")
-            QgsProject.instance().addMapLayer(saved_temp_layer)
+            self.saved_temp_layer = QgsVectorLayer(data, temporary_layer_name, "ogr")
+            QgsProject.instance().addMapLayer(self.saved_temp_layer)
             self.compare_changes()
 
         else :
@@ -146,13 +148,45 @@ class ReconstructLayerTabDialog(QDialog):
             self.processing_layer = False
 
     def compare_changes_result(self, result, data):
+        print(f"Hello {data}")
         if result :
             if len(data) == 0 :
                 self.show_success("Layer", "All changes processed")
                 self.processing_layer = False
         else :
-            self.show_error(data)
-            self.processing_layer = False
+            merged_layer = self.merge_features_by_attribute(self.saved_temp_layer, "feature_id")
+
+            # Add the merged layer to the QGIS project
+            if merged_layer:
+                QgsProject.instance().addMapLayer(merged_layer)
+
+    def merge_features_by_attribute(self, input_layer, attribute):
+        """
+        Merges features in a given layer based on a common attribute using QGIS's Dissolve algorithm.
+
+        :param input_layer: The input vector layer (QgsVectorLayer)
+        :param attribute: The attribute name to dissolve by (string)
+        :return: The output layer containing merged features
+        """
+
+        if not input_layer or not isinstance(input_layer, QgsVectorLayer):
+            print("Invalid input layer")
+            return None
+
+        # Define the parameters for the dissolve algorithm
+        params = {
+            'INPUT': QgsProcessingFeatureSourceDefinition(input_layer.source(), selectedFeaturesOnly=False),
+            'FIELD': [attribute],  # Field to dissolve by
+            'OUTPUT': 'memory:'  # Output to a temporary memory layer
+        }
+
+        # Run the dissolve algorithm
+        result = processing.run("native:dissolve", params)
+
+        # Get the output layer
+        output_layer = result['OUTPUT']
+
+        return output_layer
 
     """C O N S T R U C T    L A Y E R S"""
     def construct_layer (self, layer_name) :
