@@ -73,8 +73,8 @@ class ImportDialog(QDialog):
     def quality_check_dialog(self):
         """Quality check dialog for layer selection and validation"""
         try:
-            self.qc_dialog = self.create_dialog("AMRUT 2.0", 500, 250)
-            layout = QVBoxLayout(self.qc_dialog)
+            qc_dialog = self.create_dialog("AMRUT 2.0", 500, 250)
+            layout = QVBoxLayout(qc_dialog)
 
             # Add logo layout
             logo_layout = ui.createLogoLayout("")
@@ -85,8 +85,8 @@ class ImportDialog(QDialog):
             self.file_input = self._add_file_input(layout)
 
             # Add dropdowns for layer and optional raster layer selection
-            self.layer_dropdown = QComboBox(self.qc_dialog)
-            self.raster_layer_dropdown = QComboBox(self.qc_dialog)
+            self.layer_dropdown = QComboBox(qc_dialog)
+            self.raster_layer_dropdown = QComboBox(qc_dialog)
 
             layout.addSpacing(15)
             self._add_dropdown_with_placeholder(
@@ -118,7 +118,7 @@ class ImportDialog(QDialog):
             proceed_button.clicked.connect(self.proceed_quality_check)
             layout.addWidget(proceed_button, alignment=Qt.AlignCenter)
 
-            self.qc_dialog.exec_()
+            qc_dialog.exec_()
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in quality_check_dialog: {str(e)}", 'AMRUT', Qgis.Critical)
 
@@ -186,6 +186,11 @@ class ImportDialog(QDialog):
 
                 metadata = json.loads(zip_ref.read('metadata.json'))
 
+                if metadata.get("qc_status") == "verified":
+                    QMessageBox.information(self, "File Already Verified", "This file has already been verified.")
+                    self.file_input.clear()
+                    return
+                
                 # Check for layers in metadata
                 if 'layers' not in metadata or not isinstance(metadata['layers'], list):
                     QMessageBox.warning(self, "Invalid Metadata", "'layers' array is missing or invalid in metadata.json.")
@@ -310,5 +315,11 @@ class ImportDialog(QDialog):
             )
 
             qualityCheckVisualizationDialog.exec_()
+
+            self.file_input.clear()
+            self.layer_dropdown.clear()
+            self.layer_dropdown.addItem("Select any layer for Quality Check")
+            self.layer_dropdown.model().item(0).setEnabled(False)
+            self.raster_layer_dropdown.setCurrentIndex(0)
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in proceed_quality_check: {str(e)}", 'AMRUT', Qgis.Critical)
