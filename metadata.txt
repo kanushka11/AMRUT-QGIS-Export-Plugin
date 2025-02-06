@@ -7,7 +7,7 @@ name=AMRUT 2.0 Export Data
 qgisMinimumVersion=3.0
 description=Clips layers to a desired grid, merges geometry, and exports as GeoJSON and PNG.
 version=0.1
-author=Shubhangam Garg
+author=Indian Institute of Remote Sensing, ISRO
 email=amrut@iirs.gov.in
 
 about= Implemented for Export data to Mobile App for  Attribute collection under AMRUT 2.0

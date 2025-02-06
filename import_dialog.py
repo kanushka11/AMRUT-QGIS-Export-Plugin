@@ -11,6 +11,8 @@ from qgis.core import (
 
 from . import export_ui as ui
 from . import qc_visualization_dialog as qc
+from . import import_reconstruct_dialog as reconstruct_dialog
+
 
 class ImportDialog(QDialog):
     def __init__(self, iface):
@@ -64,6 +66,8 @@ class ImportDialog(QDialog):
 
     def reconstruct_dialog(self):
         """Placeholder for the "Reconstruct Layer" dialog"""
+        self.reconstructDialog = reconstruct_dialog.ReconstructLayerTabDialog(self.iface)
+        self.reconstructDialog.exec_()
         pass
 
     def quality_check_dialog(self):
