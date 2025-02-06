@@ -9,6 +9,7 @@ from qgis.PyQt.QtWidgets import (
     QLabel,QRadioButton, 
     QComboBox, 
     QSpinBox,
+    QSizePolicy
     )
 from qgis.core import (
     QgsProcessingFeatureSourceDefinition,
@@ -166,37 +167,36 @@ def getListLayout(itemList, lable) :
     
     return layout
 
-def createLogoLayout(label_name):
+
+def createLogoLayout(heading_name, sub_heading_name=""):
     pwd = os.path.dirname(os.path.abspath(__file__))
     assets_dir = os.path.join(pwd, "assets")
-    logo1_name = 'iirs.png'
-    logo2_name = 'amrut.png'
-    logo_size = (50, 50)
-    label_text = label_name 
+    logo1_name = "iirs.png"
+    logo2_name = "amrut.png"
+    logo_size = (100, 100)
 
     logo1_path = os.path.join(assets_dir, logo1_name)
     logo2_path = os.path.join(assets_dir, logo2_name)
 
-    # Debugging: Check paths
-    # print(f"Logo 1 Path: {logo1_path}")
-    # print(f"Logo 2 Path: {logo2_path}")
-
-    # Check if files exist
     if not os.path.exists(logo1_path) or not os.path.exists(logo2_path):
         QMessageBox.critical(None, "Error", f"Logos not found!\n{logo1_path}\n{logo2_path}")
         return QHBoxLayout()
 
     logo_layout = QHBoxLayout()
+    heading_layout = QVBoxLayout()
+
+    # **Ensure No Extra Spacing**
+    heading_layout.setSpacing(0)
+    heading_layout.setContentsMargins(0, 0, 0, 0)
 
     logo1_label = QLabel()
     logo2_label = QLabel()
-    text_label = QLabel(label_text)
+    heading_label = QLabel(heading_name)
+    sub_heading_label = QLabel(sub_heading_name)
 
-    # Load logos
     logo1_pixmap = QPixmap(logo1_path).scaled(logo_size[0], logo_size[1], Qt.KeepAspectRatio, Qt.SmoothTransformation)
     logo2_pixmap = QPixmap(logo2_path).scaled(logo_size[0], logo_size[1], Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
-    # Debugging: Check pixmap validity
     if not logo1_pixmap or logo1_pixmap.isNull():
         logo1_label.setText("Logo 1 Missing")
     else:
@@ -206,24 +206,45 @@ def createLogoLayout(label_name):
         logo2_label.setText("Logo 2 Missing")
     else:
         logo2_label.setPixmap(logo2_pixmap)
-    
+
     font = QFont()
     font.setBold(True)
-    font.setUnderline(True)
-    text_label.setFont(font)
-    text_label.setContentsMargins(10, 10, 10, 10)
-    
-    text_label.setAlignment(Qt.AlignCenter)
-    logo1_label.setAlignment(Qt.AlignCenter)
-    logo2_label.setAlignment(Qt.AlignCenter)
+    heading_label.setFont(font)
+
+    heading_label.setAlignment(Qt.AlignCenter)
+    sub_heading_label.setAlignment(Qt.AlignCenter)
+
+    # **Ensure No Extra Height Contribution**
+    sub_heading_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+    sub_heading_label.setFixedHeight(sub_heading_label.sizeHint().height())  # Set exact height
+    sub_heading_label.adjustSize()  # Force correct sizing
+
+    heading_layout.addWidget(heading_label)
+    heading_layout.addWidget(sub_heading_label)
 
     logo_layout.addWidget(logo1_label)
     logo_layout.addStretch()
-    logo_layout.addWidget(text_label)
+    logo_layout.addLayout(heading_layout)
     logo_layout.addStretch()
     logo_layout.addWidget(logo2_label)
 
     return logo_layout
+
+def get_footer_note () :
+    # Footer Note
+    footer_text = "This QGIS Plugin is Designed and Developed by India Institute of Remote Sensing, ISRO Dehradun under AMRUT Phase -2 Programme of Ministry of Housing and Urban Affairs, Government of India, © IIRS, ISRO"
+    footer_label = QLabel(footer_text)
+
+    font = QFont()
+    font.setFamily("Monospace")  # Set font family
+    font.setPointSize(7)  # Set font size
+
+    # Apply font to QLabel
+    footer_label.setFont(font)
+    footer_label.setWordWrap(True)
+    footer_label.setFixedWidth(400)
+    footer_label.setAlignment(Qt.AlignCenter)
+    return footer_label
 
 def showErrorDialog(message) :
     dialog = QDialog()
@@ -236,3 +257,26 @@ def showErrorDialog(message) :
     layout.addWidget(message)
     layout.addWidget(close)
     dialog.exec_()
+def get_warning_icon () :
+    pwd = os.path.dirname(os.path.abspath(__file__))
+    assets_dir = os.path.join(pwd, "assets")
+    warning_name = "warning.png"
+
+    warning_logo_path = os.path.join(assets_dir, warning_name)
+    logo_size = (24, 24)
+    warning_logo = QPixmap(warning_logo_path).scaled(logo_size[0], logo_size[1], Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    return warning_logo
+
+
+def get_checked_icon():
+    pwd = os.path.dirname(os.path.abspath(__file__))
+    assets_dir = os.path.join(pwd, "assets")
+    checked_name = "checked.png"
+
+    checked_logo_path = os.path.join(assets_dir, checked_name)
+    logo_size = (24, 24)
+    checked_logo = QPixmap(checked_logo_path).scaled(logo_size[0], logo_size[1], Qt.KeepAspectRatio,Qt.SmoothTransformation)
+    return checked_logo
+
+
+

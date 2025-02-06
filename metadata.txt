@@ -3,29 +3,29 @@
 # This file should be included when you package your plugin.# Mandatory items:
 
 [general]
-name=Sankalan 2
+name=AMRUT 2.0 Export Data
 qgisMinimumVersion=3.0
-description=Tool for transferring data form and to Sankalan 2.0 Mobile App for field survey .
-version=0.2
-author=Shubhangam Garg
+description=Clips layers to a desired grid, merges geometry, and exports as GeoJSON and PNG.
+version=0.1
+author=Indian Institute of Remote Sensing, ISRO
 email=amrut@iirs.gov.in
 
 about= Implemented for Export data to Mobile App for  Attribute collection under AMRUT 2.0
 
-tracker=https://gitlab.com/iirs-amrut/amrut-qgis-plugin/-/issues
-repository=https://gitlab.com/iirs-amrut/amrut-qgis-plugin
+tracker=https://git.iirs.gov.in/amrut/amrut_qgis_export_plugin/-/issues
+repository=https://git.iirs.gov.in/amrut/amrut_qgis_export_plugin/
 # End of mandatory metadata
 
 # Recommended items:
 
 hasProcessingProvider=no
 # Uncomment the following line and add your changelog:
-changelog= Quality Check for data from mobile application added
+# changelog=
 
 # Tags are comma separated with spaces allowed
 tags=python
 
-homepage=https://amrut-qgis-plugin-899fcf.gitlab.io
+homepage=https://amrut.iirs.gov.in/
 category=Plugins
 icon=icon.png
 # experimental flag
@@ -40,7 +40,7 @@ deprecated=False
 # plugin_dependencies=
 
 Category of the plugin: Raster, Vector, Database or Web
-#category= Vector
+# category=
 
 # If the plugin can run on QGIS Server.
 server=False

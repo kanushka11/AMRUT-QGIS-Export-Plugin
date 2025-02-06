@@ -9,12 +9,12 @@ class OpenPluginDialog(QDialog):
         super().__init__()
         self.iface = iface
         self.setWindowTitle("AMRUT 2.0")
-        self.setMinimumSize(400, 200)
+        self.setMinimumSize(500, 250)
 
         layout = QVBoxLayout(self)
 
         # Create the logo layout (which now includes the label)
-        logo_layout = ui.createLogoLayout("Sankalan 2.0")
+        logo_layout = ui.createLogoLayout("SANKALAN 2.0", "Mobile Import-Export Plugin")
 
         # Add the logo layout to the main layout
         layout.addLayout(logo_layout)
@@ -29,9 +29,13 @@ class OpenPluginDialog(QDialog):
         self.import_button.setFixedSize(200, 25)  # Set fixed width for consistency
         self.import_button.clicked.connect(self.on_import)
 
+        #Footer Note
+        footer_label = ui.get_footer_note()
+
         # Add buttons to the layout and center them
         layout.addWidget(self.export_button, alignment=Qt.AlignCenter)
         layout.addWidget(self.import_button, alignment=Qt.AlignCenter)
+        layout.addWidget(footer_label, alignment=Qt.AlignCenter)
 
         # Variable to store the action chosen by the user
         self.selected_action = None
