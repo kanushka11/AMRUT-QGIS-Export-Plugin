@@ -35,6 +35,8 @@ from PyQt5.QtGui import QPixmap
 from . import export_ui as ui
 from . import import_workers as workers
 from . import import_process_layer as process, import_construct_layer as construct
+from . import import_reconstruct_feature
+
 from qgis.core import QgsProject, QgsMapLayer
 import os
 import sip
@@ -170,9 +172,12 @@ class ReconstructLayerTabDialog(QDialog):
                 self.processing_layer = False
             else :
                 self.selected_raster_layer = self.get_layer_by_name(self.selected_raster_layer_name)
-                self.transform_raster_CRS(self.saved_temp_layer, self.selected_raster_layer)
-                merged_layer = self.merge_features_by_attribute(self.saved_temp_layer, "feature_id")
-                print(merged_layer)
+                selected_layer = self.get_layer_by_name(self.selected_layer_for_processing)
+                reconstruct_feature = import_reconstruct_feature.ReconstructFeatures(selected_layer, self.saved_temp_layer, self.selected_raster_layer, data)
+                reconstruct_feature.merge_attribute_dialog()
+                # self.transform_raster_CRS(self.saved_temp_layer, self.selected_raster_layer)
+                # merged_layer = self.merge_features_by_attribute(self.saved_temp_layer, "feature_id")
+                # print(merged_layer)
         else :
             self.show_error(data)
             self.processing_layer = False
@@ -268,7 +273,6 @@ class ReconstructLayerTabDialog(QDialog):
                 QgsProject.instance().addMapLayer(self.reprojected_raster_layer)
 
                 return
-
 
     """C O N S T R U C T    L A Y E R S"""
     def construct_layer (self, layer_name) :
