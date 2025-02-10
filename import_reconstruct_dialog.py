@@ -21,19 +21,26 @@ from qgis.PyQt.QtWidgets import (
 from qgis.core import (
     QgsProject,
     QgsProcessingFeedback,
+    QgsProcessingContext,
     QgsMessageLog,
     Qgis,
     QgsVectorLayer,
-    QgsApplication
+    QgsApplication,
+    QgsProcessingFeatureSourceDefinition,
+    QgsCoordinateTransform, 
+    QgsRasterLayer
 )
 from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject, QThread, Qt
 from PyQt5.QtGui import QPixmap
 from . import export_ui as ui
 from . import import_workers as workers
 from . import import_process_layer as process, import_construct_layer as construct
+from . import import_reconstruct_feature
+
 from qgis.core import QgsProject, QgsMapLayer
 import os
 import sip
+import processing
 
 
 
@@ -82,6 +89,7 @@ class ReconstructLayerTabDialog(QDialog):
         self.navigation_layout.addWidget(self.next_button)
 
         layout.addLayout(self.navigation_layout)
+        self.reprojected_raster_layer = None
 
     """N A V I G A T I O N      M E T H O D S"""
     def navigate_next(self):
@@ -133,26 +141,138 @@ class ReconstructLayerTabDialog(QDialog):
         else:
             error_msg = data
             self.show_error(error_msg)
+
     def layer_construction_result (self, result, data) :
         if result :
             self.show_success("Layer", f"Layer successfully re-constructed and saved at {data}")
             temporary_layer_name = f"Temporary_{self.selected_layer_for_processing}"
-            saved_temp_layer = QgsVectorLayer(data, temporary_layer_name, "ogr")
-            QgsProject.instance().addMapLayer(saved_temp_layer)
+            self.saved_temp_layer = QgsVectorLayer(data, temporary_layer_name, "ogr")
+            QgsProject.instance().addMapLayer(self.saved_temp_layer)
             self.compare_changes()
 
         else :
             self.show_error(data)
             self.processing_layer = False
 
+    def get_layer_by_name(self, layer_name):
+        """Retrieve a layer from the QGIS project by its name."""
+        try:
+            for layer in QgsProject.instance().mapLayers().values():
+                if layer.name() == layer_name:
+                    return layer
+            return None
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error in get_layer_by_name: {str(e)}", 'AMRUT', Qgis.Critical)
+            return None
+
     def compare_changes_result(self, result, data):
         if result :
             if len(data) == 0 :
                 self.show_success("Layer", "All changes processed")
                 self.processing_layer = False
+            else :
+                self.selected_raster_layer = self.get_layer_by_name(self.selected_raster_layer_name)
+                selected_layer = self.get_layer_by_name(self.selected_layer_for_processing)
+                reconstruct_feature = import_reconstruct_feature.ReconstructFeatures(selected_layer, self.saved_temp_layer, self.selected_raster_layer, data)
+                reconstruct_feature.merge_attribute_dialog()
+                # self.transform_raster_CRS(self.saved_temp_layer, self.selected_raster_layer)
+                # merged_layer = self.merge_features_by_attribute(self.saved_temp_layer, "feature_id")
+                # print(merged_layer)
         else :
             self.show_error(data)
             self.processing_layer = False
+
+
+
+    def merge_features_by_attribute(self, input_layer, attribute):
+        """
+        Merges features in a given layer based on a common attribute using QGIS's Dissolve algorithm.
+
+        :param input_layer: The input vector layer (QgsVectorLayer)
+        :param attribute: The attribute name to dissolve by (string)
+        :return: The output layer containing merged features
+        """
+        print(input_layer)
+        if not input_layer or not isinstance(input_layer, QgsVectorLayer):
+            print("Invalid input layer")
+            return None
+
+        # Define the parameters for the dissolve algorithm
+        params = {
+            'INPUT': QgsProcessingFeatureSourceDefinition(input_layer.source(), selectedFeaturesOnly=False),
+            'FIELD': [attribute],  # Field to dissolve by
+            'OUTPUT': 'memory:'  # Output to a temporary memory layer
+        }
+
+        # Run the dissolve algorithm
+        result = processing.run("native:dissolve", params)
+
+        # Get the output layer
+        output_layer = result['OUTPUT']
+        QgsProject.instance().addMapLayer(output_layer)
+        return output_layer
+    
+    def remove_layer_by_name(self, layer_name):
+        """Remove a layer from the QGIS project by its name."""
+        try:
+            for layer in QgsProject.instance().mapLayers().values():
+                if layer.name() == layer_name:
+                    QgsProject.instance().removeMapLayer(layer.id())
+                    break
+            return None
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error in remove_layer_by_name: {str(e)}", 'AMRUT', Qgis.Critical)
+            return None
+
+    def transform_raster_CRS(self, layer, raster_layer):
+        """Create a map canvas to render the given layer."""
+        existing_layer = None
+
+        if raster_layer and self.reprojected_raster_layer == None:
+            # Remove if a clipped and reprojected raster already exists
+            self.remove_layer_by_name(f"Temporary_{raster_layer.name()}")
+        elif raster_layer:
+            # Check if a clipped and reprojected raster already exists
+            for lyr in QgsProject.instance().mapLayers().values():
+                if lyr.name() == f"Temporary_{raster_layer.name()}" and isinstance(lyr, QgsRasterLayer):
+                    existing_layer = lyr
+                    break
+
+        if raster_layer:
+            # Raster clipping and reprojection logic
+            if existing_layer:
+                self.reprojected_raster_layer = existing_layer
+            else:
+                # Get the CRS of the grid layer (vector) and raster layer
+                grid_crs = layer.crs()
+                raster_crs = raster_layer.crs()
+                processing_context = QgsProcessingContext()
+                feedback = QgsProcessingFeedback()
+
+                # Reproject the clipped raster to the grid CRS
+                reproject_params = {
+                    'INPUT': raster_layer.source(),
+                    'SOURCE_CRS': raster_crs.authid(),  # Source CRS (from the clipped raster)
+                    'TARGET_CRS': grid_crs.authid(),    # Target CRS (grid layer CRS)
+                    'RESAMPLING': 0,                    # Nearest neighbor resampling
+                    'NODATA': -9999,                    # Specify NoData value if needed
+                    'OUTPUT': 'TEMPORARY_OUTPUT'        # Output as a temporary layer
+                }
+
+                # Run the reprojection algorithm
+                transform_result = processing.run("gdal:warpreproject", reproject_params, context=processing_context, feedback=feedback)
+
+                # Get the reprojected raster layer from the result
+                self.reprojected_raster_layer = QgsRasterLayer(transform_result['OUTPUT'], f"Temporary_{raster_layer.name()}")
+
+                # Validate the reprojected raster layer
+                if not self.reprojected_raster_layer.isValid():
+                    raise ValueError("Failed to reproject the raster layer.")
+
+                # Add the reprojected raster layer to the project
+                QgsProject.instance().addMapLayer(self.reprojected_raster_layer)
+
+                return
 
     """C O N S T R U C T    L A Y E R S"""
     def construct_layer (self, layer_name) :
@@ -276,11 +396,11 @@ class ReconstructLayerTabDialog(QDialog):
 
         # Ignore default option
         if selected_layer_name == "Select a Raster Layer":
-            self.selected_raster_layer = None
+            self.selected_raster_layer_name = None
         else:
-            self.selected_raster_layer = selected_layer_name
+            self.selected_raster_layer_name = selected_layer_name
 
-        print(f"Selected Raster Layer: {self.selected_raster_layer}")
+        print(f"Selected Raster Layer: {self.selected_raster_layer_name}")
 
     def show_error (self, error):
         self.progress_bar.setRange(0, 100)  # Reset progress bar range
@@ -352,7 +472,7 @@ class ReconstructLayerTabDialog(QDialog):
 
             # Process button
             self.process_button = QPushButton("Process")
-            self.process_button.clicked.connect(self.process_layer)
+            # self.process_button.clicked.connect(self.process_layer)
             layout.addWidget(self.process_button)
 
             # Status icon
@@ -394,3 +514,4 @@ class ReconstructLayerTabDialog(QDialog):
 
         def get_layout(self):
             return self.layout
+
