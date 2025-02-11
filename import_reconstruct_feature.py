@@ -1,6 +1,14 @@
-from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame, QMessageBox
+from PyQt5.QtWidgets import (
+    QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame, QMessageBox,
+    QTableWidget, QTableWidgetItem, QGroupBox
+)
+from PyQt5.QtWidgets import QScrollArea, QGroupBox, QTableWidget, QTableWidgetItem
 from PyQt5.QtCore import Qt
-from qgis.core import QgsProject, QgsRectangle, QgsMessageLog, Qgis, QgsWkbTypes, QgsProcessingFeedback,QgsProcessingContext,QgsProcessingFeatureSourceDefinition,QgsCoordinateTransform, QgsRasterLayer
+from qgis.core import (
+    QgsProject, QgsRectangle, QgsMessageLog, Qgis, QgsWkbTypes,
+    QgsProcessingFeedback, QgsProcessingContext, QgsProcessingFeatureSourceDefinition,
+    QgsCoordinateTransform, QgsRasterLayer, QgsFeature  
+)
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
 from PyQt5.QtGui import QColor
 from math import cos, radians
@@ -17,68 +25,116 @@ class ReconstructFeatures:
         self.selected_layer_for_processing = selected_layer
         self.saved_temp_layer = saved_temp_layer
         self.selected_raster_layer = selected_raster_layer
-        self.data = data
+        self.data = data  # data is a map: feature_id -> array/list of broken features
         self.reprojected_raster_layer = None
 
     def merge_attribute_dialog(self):
-        """Show the dialog for verifying features."""
-
-        # Create a new dialog for verification
+        """Show the dialog for verifying features in full-screen mode."""
         dialog = QDialog(None)
-        dialog.setWindowTitle("Merge Feature Attribute")  # Set the dialog title
-        dialog.setMinimumSize(800, 600)  # Set minimum size for the dialog window
-
-        # Disable the close button and system menu options
+        dialog.setWindowTitle("Merge Feature Attribute")
+        # Set the dialog to full-screen (or maximized)
+        dialog.setWindowState(Qt.WindowMaximized)
         dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowCloseButtonHint)
         dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowSystemMenuHint)
 
-        main_layout = QVBoxLayout(dialog)
-        canvas_layout = QHBoxLayout()  # Layout for map canvases
-        # Add canvases for selected and temporary layers
-        if self.selected_raster_layer and self.reprojected_raster_layer == None:
+        main_layout = QVBoxLayout(dialog)  # Main vertical layout
+
+        # Create a horizontal layout for left and right canvases (Top Section)
+        top_canvas_layout = QHBoxLayout()
+
+        # Ensure raster transformation if needed
+        if self.selected_raster_layer and self.reprojected_raster_layer is None:
             self.transform_raster_CRS(self.selected_layer_for_processing, self.selected_raster_layer)
 
+        # Create left (Original Data) and right (Vetted Data) canvases
         left_canvas_frame = self.create_canvas_frame("Original Data", self.selected_layer_for_processing)
-        canvas_layout.addWidget(left_canvas_frame)  # Add the left canvas to the layout
         right_canvas_frame = self.create_canvas_frame("Vetted Data", self.saved_temp_layer)
-        canvas_layout.addWidget(right_canvas_frame)  # Add the right canvas to the layout
-        main_layout.addLayout(canvas_layout)  # Add the canvas layout to the main layout
 
-        # Add buttons for accepting or rejecting features
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(25) 
-        reject_button = QPushButton("Reject Vetted Feature") 
-        accept_button = QPushButton("Accept Vetted Feature")
-        # Modify the width of the buttons
-        accept_button.setFixedWidth(120)  # Set a fixed width for the accept button
-        reject_button.setFixedWidth(120)  # Set a fixed width for the reject button
+        top_canvas_layout.addWidget(left_canvas_frame)
+        top_canvas_layout.addWidget(right_canvas_frame)
+        # Add the top section with a stretch factor (e.g., 1/3 of the screen)
+        main_layout.addLayout(top_canvas_layout, stretch=1)
 
-        # Modify the color of the buttons
-        accept_button.setStyleSheet("background-color: green; color: white;")
-        reject_button.setStyleSheet("background-color: red; color: white;")
-        accept_button.setCursor(Qt.PointingHandCursor)
-        reject_button.setCursor(Qt.PointingHandCursor)
-        button_layout.addWidget(reject_button)  # Add the reject button to the layout
-        button_layout.addWidget(accept_button)  # Add the accept button to the layout
-        button_layout.setAlignment(Qt.AlignCenter)
-        main_layout.addLayout(button_layout)  # Add the button layout to the main layout
+        # Create the bottom section: a frame that shows attribute tables for the broken features.
+        bottom_attr_frame = self.create_attribute_tables_frame()
+        # Add the bottom section with a higher stretch factor (e.g., 2/3 of the screen)
+        main_layout.addWidget(bottom_attr_frame, stretch=2)
 
-        self.current_feature_index = 0  # Track the index of the current feature being verified
-        self.dialog = dialog  # Store the dialog reference
-        self.left_canvas = left_canvas_frame.findChild(QgsMapCanvas)  # Retrieve the left canvas
-        self.right_canvas = right_canvas_frame.findChild(QgsMapCanvas)  # Retrieve the right canvas
+        self.current_feature_index = 0
+        self.dialog = dialog
+        self.left_canvas = left_canvas_frame.findChild(QgsMapCanvas)
+        self.right_canvas = right_canvas_frame.findChild(QgsMapCanvas)
+        # No canvas is created in the bottom section, so we do not assign self.bottom_canvas
 
-        # Synchronize the views of both canvases
-        self.is_synchronizing = False  # Flag to avoid recursive synchronization
+        # Synchronize the top two canvases
+        self.is_synchronizing = False
         self.left_canvas.extentsChanged.connect(self.synchronize_right_canvas)
         self.right_canvas.extentsChanged.connect(self.synchronize_left_canvas)
 
-        accept_button.clicked.connect(lambda: self.move_to_next_feature())
-        reject_button.clicked.connect(lambda: self.reject_feature())
-
-        # Update the canvases to focus on the first feature
         self.update_canvases()
-        dialog.exec_()  # Display the dialog
+        dialog.exec_()
+
+    def create_attribute_tables_frame(self):
+        """
+        Create a QFrame that displays attribute tables (horizontally)
+        for all the broken features in the first feature entry of the data.
+        This frame is wrapped inside a QScrollArea to allow horizontal scrolling.
+        """
+        # Create a container frame for the attribute tables and set a horizontal layout.
+        container = QFrame()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(10)
+
+        # Check if data is available.
+        if self.data:
+            # Get the first feature_id (order in a dict is arbitrary)
+            first_feature_id = next(iter(self.data))
+            broken_features = self.data[first_feature_id]
+            if broken_features:
+                # For each broken feature, create a group with a table of its attributes.
+                for idx, broken_feature in enumerate(broken_features, start=1):
+                    group_box = QGroupBox(f"Broken Feature {idx}")
+                    group_layout = QVBoxLayout(group_box)
+                    
+                    table = QTableWidget()
+                    
+                    # Check if the broken feature is a QgsFeature.
+                    if isinstance(broken_feature, QgsFeature):
+                        fields = broken_feature.fields()
+                        num_fields = len(fields)
+                        table.setColumnCount(2)
+                        table.setRowCount(num_fields)
+                        table.setHorizontalHeaderLabels(["Attribute", "Value"])
+                        for row in range(num_fields):
+                            field_name = fields.at(row).name()
+                            value = broken_feature.attribute(field_name)
+                            table.setItem(row, 0, QTableWidgetItem(field_name))
+                            table.setItem(row, 1, QTableWidgetItem(str(value)))
+                    else:
+                        # Otherwise, display its string representation in one column.
+                        table.setColumnCount(1)
+                        table.setRowCount(1)
+                        table.setHorizontalHeaderLabels(["Value"])
+                        table.setItem(0, 0, QTableWidgetItem(str(broken_feature)))
+                    
+                    group_layout.addWidget(table)
+                    layout.addWidget(group_box)
+            else:
+                layout.addWidget(QLabel("No broken features available for the first feature."))
+        else:
+            layout.addWidget(QLabel("No data available."))
+
+        # Wrap the container frame in a QScrollArea to enable horizontal scrolling.
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setWidget(container)
+        
+        # Optionally, force the horizontal scrollbar to appear if needed.
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        
+        return scroll_area
 
     def remove_layer_by_name(self, layer_name):
         """Remove a layer from the QGIS project by its name."""

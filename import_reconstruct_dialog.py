@@ -57,6 +57,7 @@ class ReconstructLayerTabDialog(QDialog):
         self.setWindowTitle("Sankalan 2.0")
         self.setMinimumSize(700, 500)
         self.processing_layer = False
+        self.selected_raster_layer_name = None
 
         # Main layout
         layout = QVBoxLayout(self)
@@ -182,8 +183,6 @@ class ReconstructLayerTabDialog(QDialog):
             self.show_error(data)
             self.processing_layer = False
 
-
-
     def merge_features_by_attribute(self, input_layer, attribute):
         """
         Merges features in a given layer based on a common attribute using QGIS's Dissolve algorithm.
@@ -211,68 +210,6 @@ class ReconstructLayerTabDialog(QDialog):
         output_layer = result['OUTPUT']
         QgsProject.instance().addMapLayer(output_layer)
         return output_layer
-    
-    def remove_layer_by_name(self, layer_name):
-        """Remove a layer from the QGIS project by its name."""
-        try:
-            for layer in QgsProject.instance().mapLayers().values():
-                if layer.name() == layer_name:
-                    QgsProject.instance().removeMapLayer(layer.id())
-                    break
-            return None
-        except Exception as e:
-            QgsMessageLog.logMessage(f"Error in remove_layer_by_name: {str(e)}", 'AMRUT', Qgis.Critical)
-            return None
-
-    def transform_raster_CRS(self, layer, raster_layer):
-        """Create a map canvas to render the given layer."""
-        existing_layer = None
-
-        if raster_layer and self.reprojected_raster_layer == None:
-            # Remove if a clipped and reprojected raster already exists
-            self.remove_layer_by_name(f"Temporary_{raster_layer.name()}")
-        elif raster_layer:
-            # Check if a clipped and reprojected raster already exists
-            for lyr in QgsProject.instance().mapLayers().values():
-                if lyr.name() == f"Temporary_{raster_layer.name()}" and isinstance(lyr, QgsRasterLayer):
-                    existing_layer = lyr
-                    break
-
-        if raster_layer:
-            # Raster clipping and reprojection logic
-            if existing_layer:
-                self.reprojected_raster_layer = existing_layer
-            else:
-                # Get the CRS of the grid layer (vector) and raster layer
-                grid_crs = layer.crs()
-                raster_crs = raster_layer.crs()
-                processing_context = QgsProcessingContext()
-                feedback = QgsProcessingFeedback()
-
-                # Reproject the clipped raster to the grid CRS
-                reproject_params = {
-                    'INPUT': raster_layer.source(),
-                    'SOURCE_CRS': raster_crs.authid(),  # Source CRS (from the clipped raster)
-                    'TARGET_CRS': grid_crs.authid(),    # Target CRS (grid layer CRS)
-                    'RESAMPLING': 0,                    # Nearest neighbor resampling
-                    'NODATA': -9999,                    # Specify NoData value if needed
-                    'OUTPUT': 'TEMPORARY_OUTPUT'        # Output as a temporary layer
-                }
-
-                # Run the reprojection algorithm
-                transform_result = processing.run("gdal:warpreproject", reproject_params, context=processing_context, feedback=feedback)
-
-                # Get the reprojected raster layer from the result
-                self.reprojected_raster_layer = QgsRasterLayer(transform_result['OUTPUT'], f"Temporary_{raster_layer.name()}")
-
-                # Validate the reprojected raster layer
-                if not self.reprojected_raster_layer.isValid():
-                    raise ValueError("Failed to reproject the raster layer.")
-
-                # Add the reprojected raster layer to the project
-                QgsProject.instance().addMapLayer(self.reprojected_raster_layer)
-
-                return
 
     """C O N S T R U C T    L A Y E R S"""
     def construct_layer (self, layer_name) :
