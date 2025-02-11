@@ -10,31 +10,22 @@ from qgis.PyQt.QtWidgets import (
     QComboBox,
     QMessageBox,
     QFileDialog,
-    QListWidget,
-    QListWidgetItem,
     QHBoxLayout,
-    QRadioButton,
-    QSpinBox,
     QTabBar
 
 )
 from qgis.core import (
     QgsProject,
-    QgsProcessingFeedback,
-    QgsProcessingContext,
     QgsMessageLog,
     Qgis,
     QgsVectorLayer,
-    QgsApplication,
     QgsProcessingFeatureSourceDefinition,
-    QgsCoordinateTransform, 
-    QgsRasterLayer
 )
-from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject, QThread, Qt
+from PyQt5.QtCore import QThread, Qt
 from PyQt5.QtGui import QPixmap
 from . import export_ui as ui
 from . import import_workers as workers
-from . import import_process_layer as process, import_construct_layer as construct
+from . import import_process_layer as process
 from . import import_reconstruct_feature
 
 from qgis.core import QgsProject, QgsMapLayer
