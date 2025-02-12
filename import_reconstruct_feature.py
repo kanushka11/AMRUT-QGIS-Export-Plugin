@@ -6,11 +6,10 @@ from PyQt5.QtWidgets import QScrollArea, QGroupBox, QTableWidget, QTableWidgetIt
 from PyQt5.QtCore import Qt
 from qgis.core import (
     QgsProject, QgsRectangle, QgsMessageLog, Qgis, QgsWkbTypes,
-    QgsProcessingFeedback, QgsProcessingContext, QgsRasterLayer, QgsFeature  
+    QgsProcessingFeedback, QgsProcessingContext, QgsRasterLayer, QgsFeature, QgsFeatureRequest, edit
 )
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
 from PyQt5.QtGui import QColor
-from itertools import islice
 import processing
 
 class ReconstructFeatures:
@@ -118,7 +117,7 @@ class ReconstructFeatures:
 
                     # Create "Accept" button
                     accept_button = QPushButton("Accept")
-                    accept_button.clicked.connect(self.accept_and_next_feature)
+                    accept_button.clicked.connect(lambda checked, bf=broken_feature: self.accept_and_next_feature(bf))
                     group_layout.addWidget(accept_button)
 
                     layout.addWidget(group_box)
@@ -136,67 +135,91 @@ class ReconstructFeatures:
         return scroll_area
     
 
-    def accept_and_next_feature(self):
+    def accept_and_next_feature(self, accepted_feature):
         """
-        Update all matching broken features in self.saved_temp_layer with the accepted feature's attributes,
-        excluding the system-generated primary key, then move to the next feature.
+        Store the accepted feature separately and move to the next feature.
+        Updates features in saved_temp_layer based on feature_id, excluding primary keys.
         """
         if not self.data or self.current_feature_index >= len(self.data):
             QMessageBox.information(None, "Review Complete", "All features have been reviewed.")
-            self.dialog.accept()  # Close the dialog
-            return  
+            self.dialog.accept()
+            return
 
-        # Get the current feature_id
-        feature_ids = list(self.data.keys())
-        current_feature_id = int(feature_ids[self.current_feature_index])
+        print(f"Accepted Feature (ID: {accepted_feature.id()}):")
 
-        # Fetch the accepted feature from saved_temp_layer
-        accepted_feature = next(self.saved_temp_layer.getFeatures(f"feature_id = {current_feature_id}"), None)
-        
-        if accepted_feature:
-            # Get all field names
-            fields = self.saved_temp_layer.fields()
-            field_names = [field.name() for field in fields]
+        if self.saved_temp_layer is not None:
+            # Get primary key attribute indices
+            primary_key_indices = self.saved_temp_layer.primaryKeyAttributes()
+            print(f"Primary key indices are : {primary_key_indices}")
 
-            # Identify a potential primary key (usually an ID field)
-            primary_key_field = None
-            possible_primary_keys = {"fid", "id", "feature_id"}  # Common primary key names
+            # Identify the feature_id field name and value from the accepted feature
+            # Assuming 'feature_id' is a field in your layer. Adjust if different.
+            feature_id_field_name = 'feature_id'  # Replace with the actual field name
+            accepted_feature_id = accepted_feature[feature_id_field_name]
 
-            for field in fields:
-                if field.name().lower() in possible_primary_keys or not field.editable():
-                    primary_key_field = field.name()
-                    break  # Stop at the first detected primary key
+            # Prepare attribute map for updating existing features
+            attributes = {}
+            fields = accepted_feature.fields() # gets the fields of accepted_feature
+            for field in fields: # looping in all the fields
+                field_index = fields.indexOf(field.name()) # get field index to check if it is a primary key
+                if field_index not in primary_key_indices: # if field is not a primary key
+                    attributes[field.name()] = accepted_feature[field.name()] # append attribute value to update in layer
 
-            # Prepare updated attributes (excluding primary key)
-            updated_attributes = {
-                field_name: accepted_feature[field_name]
-                for field_name in field_names
-                if field_name != primary_key_field  # Skip primary key
-            }
+            # Update features in saved_temp_layer
+            with edit(self.saved_temp_layer):
+                request = QgsFeatureRequest()
+                request.setFilterExpression(f'"{feature_id_field_name}" = \'{accepted_feature_id}\'')
+                for feat in self.saved_temp_layer.getFeatures(request):
+                    # Update attributes
+                    for key, value in attributes.items():
+                        feat[key] = value
+                    self.saved_temp_layer.updateFeature(feat)
 
-            # Start editing
-            self.saved_temp_layer.startEditing()
-            
-            for feature in self.saved_temp_layer.getFeatures():
-                if feature["feature_id"] in feature_ids and feature.id() != accepted_feature.id():
-                    self.saved_temp_layer.dataProvider().changeAttributeValues({
-                        feature.id(): updated_attributes
-                    })
-
-            self.saved_temp_layer.commitChanges()
+            print(f"Updated features in saved_temp_layer with {feature_id_field_name} = {accepted_feature_id}")
+        else:
+            print("saved_temp_layer is None. Layer might not be initialized yet.")
 
         # Move to the next feature
         self.current_feature_index += 1
         if self.current_feature_index < len(self.data):
-            # Update attribute tables
             new_attr_frame = self.create_attribute_tables_frame()
             self.dialog.layout().replaceWidget(self.dialog.layout().itemAt(1).widget(), new_attr_frame)
-
-            # Update canvases
             self.update_canvases()
         else:
             QMessageBox.information(None, "Review Complete", "All features have been reviewed.")
-            self.dialog.accept()  # Close the dialog
+            self.dialog.accept()
+
+            # Rename the layer in the project here, *after* the dialog is accepted.
+            if self.saved_temp_layer is not None:
+                layer_name = self.saved_temp_layer.name()
+
+                # Remove "Temporary_" prefix (if present)
+                if layer_name.startswith("Temporary_"):
+                    layer_name = layer_name[len("Temporary_"):]
+
+                # Add "_vetted" suffix
+                new_layer_name = layer_name + "_vetted"
+
+                # Get the QGIS project instance
+                project = QgsProject.instance()
+
+                # Get the root node of the layer tree
+                root = project.layerTreeRoot()
+
+                # Find the layer's node in the layer tree
+                layer_node = root.findLayer(self.saved_temp_layer.id())
+
+                # Rename the layer's node
+                if layer_node is not None:
+                    layer_node.setName(new_layer_name)
+                    print(f"Layer renamed in project to: {new_layer_name}")
+                else:
+                    print("Layer node not found in layer tree.")
+
+                # Optionally, also update the layer's name in the layer object itself
+                self.saved_temp_layer.setName(new_layer_name)
+            else:
+                print("saved_temp_layer is None, cannot rename.")
 
 
     def remove_layer_by_name(self, layer_name):
