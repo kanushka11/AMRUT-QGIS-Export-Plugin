@@ -11,8 +11,8 @@ from qgis.PyQt.QtWidgets import (
     QMessageBox,
     QFileDialog,
     QHBoxLayout,
-    QTabBar
-
+    QTabBar,
+    QApplication
 )
 from qgis.core import (
     QgsProject,
@@ -158,21 +158,65 @@ class ReconstructLayerTabDialog(QDialog):
             return None
 
     def compare_changes_result(self, result, data):
-        if result :
-            if len(data) == 0 :
+        if result:
+            if len(data) == 0:
                 self.show_success("Layer", "All changes processed")
                 self.processing_layer = False
-            else :
+            else:
+                # Set progress to 0% before starting
+                self.progress_bar.setRange(0, 0)  
+                QApplication.processEvents()  # Force UI update
+
                 self.selected_raster_layer = self.get_layer_by_name(self.selected_raster_layer_name)
                 selected_layer = self.get_layer_by_name(self.selected_layer_for_processing)
-                reconstruct_feature = import_reconstruct_feature.ReconstructFeatures(selected_layer, self.saved_temp_layer, self.selected_raster_layer, data)
+
+                reconstruct_feature = import_reconstruct_feature.ReconstructFeatures(
+                    selected_layer, self.saved_temp_layer, self.selected_raster_layer, data
+                )
                 reconstruct_feature.merge_attribute_dialog()
-                # self.transform_raster_CRS(self.saved_temp_layer, self.selected_raster_layer)
-                # merged_layer = self.merge_features_by_attribute(self.saved_temp_layer, "feature_id")
-                # print(merged_layer)
-        else :
+                merged_layer = self.merge_features_by_attribute(self.saved_temp_layer, "feature_id")
+
+                if self.saved_temp_layer is not None:
+                    layer_name = self.saved_temp_layer.name()
+
+                    if layer_name.startswith("Temporary_"):
+                        layer_name = layer_name[len("Temporary_"):]
+
+                    new_layer_name = layer_name + "_vetted"
+                    project = QgsProject.instance()
+                    root = project.layerTreeRoot()
+                    layer_node = root.findLayer(self.saved_temp_layer.id())
+
+                    if layer_node is not None:
+                        layer_node.setName(new_layer_name)
+                        print(f"Layer renamed in project to: {new_layer_name}")
+                    else:
+                        print("Layer node not found in layer tree.")
+
+                    if merged_layer is not None and merged_layer.isValid():
+                        QgsProject.instance().removeMapLayer(self.saved_temp_layer.id())
+                        merged_layer.setName(new_layer_name)
+                        QgsProject.instance().addMapLayer(merged_layer)
+                        self.saved_temp_layer = merged_layer
+                    else:
+                        self.saved_temp_layer.setName(new_layer_name)
+                        print("Merged layer is invalid. Only renaming existing layer.")
+
+                    self.saved_temp_layer.setName(new_layer_name)
+
+                else:
+                    print("saved_temp_layer is None, cannot rename.")
+
+                # Set progress to 100% after merging is completed
+                self.progress_bar.setRange(0, 100)
+                self.progress_bar.setValue(100)
+
+                # Refresh UI
+                self.refresh_layer_construction_tab()
+        else:
             self.show_error(data)
             self.processing_layer = False
+
 
     def merge_features_by_attribute(self, input_layer, attribute):
         """
@@ -199,8 +243,24 @@ class ReconstructLayerTabDialog(QDialog):
 
         # Get the output layer
         output_layer = result['OUTPUT']
-        QgsProject.instance().addMapLayer(output_layer)
+        
         return output_layer
+    
+    def refresh_layer_construction_tab(self):
+        """Refreshes the Layer Construction Tab to update layer statuses."""
+        # Remove the existing tab
+        index = self.tabs.indexOf(self.layer_construction_tab)
+        if index != -1:
+            self.tabs.removeTab(index)
+            self.layer_construction_tab.deleteLater()  # Clean up the old tab
+
+        # Re-create the tab
+        self.layer_construction_tab = self.create_layer_construction_tab()
+        self.tabs.addTab(self.layer_construction_tab, "Construct Layer")
+
+        # Set the current index back to the Layer Construction Tab.
+        layer_reconstruction_tab_index = 1  # Assuming it's the second tab (index 1).  Adjust if needed.
+        self.tabs.setCurrentIndex(layer_reconstruction_tab_index)
 
     """C O N S T R U C T    L A Y E R S"""
     def construct_layer (self, layer_name) :
@@ -372,8 +432,8 @@ class ReconstructLayerTabDialog(QDialog):
         for layer in QgsProject.instance().mapLayers().values():
             if layer.name() == processed_layer_name:
                 processed = True
-
         return processed
+    
     def is_layer_in_temporary_stage (self, layer_name) :
         print(f"Checking for Temporary layer for {layer_name} layer")
         temporary = False

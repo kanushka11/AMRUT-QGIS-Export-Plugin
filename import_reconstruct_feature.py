@@ -188,39 +188,7 @@ class ReconstructFeatures:
         else:
             QMessageBox.information(None, "Review Complete", "All features have been reviewed.")
             self.dialog.accept()
-
-            # Rename the layer in the project here, *after* the dialog is accepted.
-            if self.saved_temp_layer is not None:
-                layer_name = self.saved_temp_layer.name()
-
-                # Remove "Temporary_" prefix (if present)
-                if layer_name.startswith("Temporary_"):
-                    layer_name = layer_name[len("Temporary_"):]
-
-                # Add "_vetted" suffix
-                new_layer_name = layer_name + "_vetted"
-
-                # Get the QGIS project instance
-                project = QgsProject.instance()
-
-                # Get the root node of the layer tree
-                root = project.layerTreeRoot()
-
-                # Find the layer's node in the layer tree
-                layer_node = root.findLayer(self.saved_temp_layer.id())
-
-                # Rename the layer's node
-                if layer_node is not None:
-                    layer_node.setName(new_layer_name)
-                    print(f"Layer renamed in project to: {new_layer_name}")
-                else:
-                    print("Layer node not found in layer tree.")
-
-                # Optionally, also update the layer's name in the layer object itself
-                self.saved_temp_layer.setName(new_layer_name)
-            else:
-                print("saved_temp_layer is None, cannot rename.")
-
+            
 
     def remove_layer_by_name(self, layer_name):
         """Remove a layer from the QGIS project by its name."""
