@@ -321,7 +321,7 @@ class VerificationDialog:
 
         # Determine the buffer size based on the geometry type
         if geometry_type == QgsWkbTypes.PointGeometry:
-            buffer = 0.000001  # Small buffer for point geometries
+            buffer = 0.0001  # Small buffer for point geometries
         elif geometry_type == QgsWkbTypes.LineGeometry:
             line_length = geometry.length()  # Calculate the length of the line
             buffer = line_length * 0.25  # Use half the line length as the buffer
@@ -468,13 +468,7 @@ class VerificationDialog:
                 f"GeoJSON file '{geojson_filename}' successfully replaced in the AMRUT file. QC Status: {qc_status}",
                 "AMRUT",
                 Qgis.Info
-            )
-
-            if all_verified:
-                QMessageBox.information(None, "File Verified", "All layers of this file has been verified.")
-            self.selected_layer.setSubsetString("")
-            self.temporary_layer.setSubsetString("")
-            
+            )  
         except Exception as e:
             QgsMessageLog.logMessage(f"Error replacing GeoJSON in AMRUT file: {str(e)}", "AMRUT", Qgis.Critical)
         finally:

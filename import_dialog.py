@@ -165,6 +165,7 @@ class ImportDialog(QDialog):
 
             if file:
                 if file.endswith(".amrut"):
+                    self.selected_file=file
                     self.validate_amrut_file(file)
                 else:
                     QMessageBox.warning(self, "Invalid File", "Please select a valid .amrut file.")
@@ -189,7 +190,7 @@ class ImportDialog(QDialog):
                 metadata = json.loads(zip_ref.read('metadata.json'))
 
                 if metadata.get("qc_status") == "verified":
-                    QMessageBox.information(self, "File Already Verified", "This file has already been verified.")
+                    QMessageBox.information(self, "File Verified", "All layers of this file has been verified.")
                     self.file_input.clear()
                     return
                 
@@ -318,9 +319,7 @@ class ImportDialog(QDialog):
 
             qualityCheckVisualizationDialog.exec_()
 
-            self.layer_dropdown.clear()
-            self.layer_dropdown.addItem("Select any layer for Quality Check")
-            self.layer_dropdown.model().item(0).setEnabled(False)
+            self.validate_amrut_file(self.selected_file)
             self.raster_layer_dropdown.setCurrentIndex(0)
 
         except Exception as e:

@@ -174,6 +174,8 @@ class ReconstructLayerTabDialog(QDialog):
                     selected_layer, self.saved_temp_layer, self.selected_raster_layer, data
                 )
                 reconstruct_feature.merge_attribute_dialog()
+                selected_layer.setSubsetString("")  # Reset the filter to show all features
+                self.saved_temp_layer.setSubsetString("")
                 merged_layer = self.merge_features_by_attribute(self.saved_temp_layer, "feature_id")
 
                 if self.saved_temp_layer is not None:

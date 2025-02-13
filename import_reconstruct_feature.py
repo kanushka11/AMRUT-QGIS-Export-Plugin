@@ -140,6 +140,8 @@ class ReconstructFeatures:
         Store the accepted feature separately and move to the next feature.
         Updates features in saved_temp_layer based on feature_id, excluding primary keys.
         """
+        self.selected_layer_for_processing.setSubsetString("")  # Reset the filter to show all features
+        self.saved_temp_layer.setSubsetString("")
         if not self.data or self.current_feature_index >= len(self.data):
             QMessageBox.information(None, "Review Complete", "All features have been reviewed.")
             self.dialog.accept()
@@ -186,6 +188,8 @@ class ReconstructFeatures:
             self.dialog.layout().replaceWidget(self.dialog.layout().itemAt(1).widget(), new_attr_frame)
             self.update_canvases()
         else:
+            self.set_colour_opacity(self.saved_temp_layer, 1)  # Adjust the opacity for better visualization
+            self.set_colour_opacity(self.selected_layer_for_processing, 1)
             QMessageBox.information(None, "Review Complete", "All features have been reviewed.")
             self.dialog.accept()
             
@@ -267,8 +271,8 @@ class ReconstructFeatures:
                     centroid_point.x() + buffer,
                     centroid_point.y() + buffer
                 )
-                self.zoom_to_feature_on_canvas(extent, self.left_canvas)  # Zoom the left canvas to the feature
-                self.zoom_to_feature_on_canvas(extent, self.right_canvas)  # Zoom the right canvas to the feature
+                self.zoom_to_feature_on_canvas(extent, self.left_canvas, self.selected_layer_for_processing, feature_id)  # Zoom the left canvas to the feature
+                self.zoom_to_feature_on_canvas(extent, self.right_canvas, self.saved_temp_layer, feature_id)  # Zoom the right canvas to the feature
             else:
                 # Log a warning if the feature cannot be found
                 QgsMessageLog.logMessage(
@@ -277,8 +281,11 @@ class ReconstructFeatures:
                     Qgis.Warning
                 )            
 
-    def zoom_to_feature_on_canvas(self, extent, canvas):
+    def zoom_to_feature_on_canvas(self, extent, canvas, layer, feature_id):
         """Zoom to the feature's bounding box on the canvas."""
+        if layer:
+            # Apply a filter to show only the specific feature
+            layer.setSubsetString(f"feature_id = {feature_id}")
         canvas.setExtent(extent)  # Set the extent of the canvas
         canvas.refresh()  # Refresh the canvas to apply the changes
 
@@ -291,7 +298,7 @@ class ReconstructFeatures:
             buffer = 0.0001  # Small buffer for point geometries
         elif geometry_type == QgsWkbTypes.LineGeometry:
             line_length = geometry.length()  # Calculate the length of the line
-            buffer = line_length * 0.5  # Use half the line length as the buffer
+            buffer = line_length * 0.25  # Use half the line length as the buffer
         elif geometry_type == QgsWkbTypes.PolygonGeometry:
             bbox = geometry.boundingBox()  # Get the bounding box of the polygon
             bbox_width = bbox.width()  # Width of the bounding box

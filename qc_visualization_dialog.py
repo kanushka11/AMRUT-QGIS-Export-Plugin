@@ -50,13 +50,17 @@ class QualityCheckVisualizationDialog(QDialog):
         # Synchronize extents between left and right map canvases
         self.setup_canvas_synchronization()
 
-        QTimer.singleShot(1000, self.show_new_feature_dialog)  # Delay in ms before triggering check
+        QTimer.singleShot(1000, lambda: self.show_new_feature_dialog(layer))
 
-    def show_new_feature_dialog(self):
+    def show_new_feature_dialog(self, layer):
         try:
             newFeatureFound = verification_dialog.VerificationDialog(self.selected_layer_name, self.selected_raster_layer_name, self.amrut_file_path, self.grid_extent)
             newFeatureFound.check_for_new_features()
-            
+            layer.setSubsetString("")
+            symbol = layer.renderer().symbol()  # Get the symbol for the layer          
+            if symbol:
+                symbol.setOpacity(1)  # Set the opacity of the symbol
+            layer.triggerRepaint()  # Trigger a repaint to apply the changes
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in show_new_feature_dialog: {str(e)}", 'AMRUT', Qgis.Critical)
 
