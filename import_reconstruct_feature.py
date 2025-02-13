@@ -1,32 +1,25 @@
 from PyQt5.QtWidgets import (
     QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame, QMessageBox,
-    QTableWidget, QTableWidgetItem, QGroupBox
+    QTableWidget, QTableWidgetItem, QGroupBox, QSizePolicy, QHeaderView
 )
 from PyQt5.QtWidgets import QScrollArea, QGroupBox, QTableWidget, QTableWidgetItem
 from PyQt5.QtCore import Qt
 from qgis.core import (
     QgsProject, QgsRectangle, QgsMessageLog, Qgis, QgsWkbTypes,
-    QgsProcessingFeedback, QgsProcessingContext, QgsProcessingFeatureSourceDefinition,
-    QgsCoordinateTransform, QgsRasterLayer, QgsFeature  
+    QgsProcessingFeedback, QgsProcessingContext, QgsRasterLayer, QgsFeature, QgsFeatureRequest, edit
 )
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
 from PyQt5.QtGui import QColor
-from math import cos, radians
-from itertools import islice
 import processing
-import zipfile
-import os
-import tempfile
-import shutil
-import json
 
 class ReconstructFeatures:
     def __init__(self, selected_layer, saved_temp_layer, selected_raster_layer, data):
         self.selected_layer_for_processing = selected_layer
         self.saved_temp_layer = saved_temp_layer
         self.selected_raster_layer = selected_raster_layer
-        self.data = data  # data is a map: feature_id -> array/list of broken features
+        self.data = data 
         self.reprojected_raster_layer = None
+        self.current_feature_index = 0  # Initialize current_feature_index
 
     def merge_attribute_dialog(self):
         """Show the dialog for verifying features in full-screen mode."""
@@ -77,64 +70,125 @@ class ReconstructFeatures:
     def create_attribute_tables_frame(self):
         """
         Create a QFrame that displays attribute tables (horizontally)
-        for all the broken features in the first feature entry of the data.
-        This frame is wrapped inside a QScrollArea to allow horizontal scrolling.
+        for all the broken features in the current feature entry.
         """
-        # Create a container frame for the attribute tables and set a horizontal layout.
         container = QFrame()
         layout = QHBoxLayout(container)
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(10)
 
-        # Check if data is available.
-        if self.data:
-            # Get the first feature_id (order in a dict is arbitrary)
-            first_feature_id = next(iter(self.data))
-            broken_features = self.data[first_feature_id]
+        # Ensure we are within the feature index range
+        if self.current_feature_index < len(self.data):
+            feature_id = list(self.data.keys())[self.current_feature_index]
+            broken_features = self.data[feature_id]
+
             if broken_features:
-                # For each broken feature, create a group with a table of its attributes.
                 for idx, broken_feature in enumerate(broken_features, start=1):
                     group_box = QGroupBox(f"Broken Feature {idx}")
                     group_layout = QVBoxLayout(group_box)
-                    
+
                     table = QTableWidget()
-                    
-                    # Check if the broken feature is a QgsFeature.
+                    table.setWordWrap(True)
+                    table.resizeColumnsToContents()
+                    table.resizeRowsToContents()
+                    table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+                    table.horizontalHeader().setStretchLastSection(True)
+                    table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
                     if isinstance(broken_feature, QgsFeature):
                         fields = broken_feature.fields()
                         num_fields = len(fields)
                         table.setColumnCount(2)
                         table.setRowCount(num_fields)
                         table.setHorizontalHeaderLabels(["Attribute", "Value"])
+
                         for row in range(num_fields):
                             field_name = fields.at(row).name()
                             value = broken_feature.attribute(field_name)
                             table.setItem(row, 0, QTableWidgetItem(field_name))
                             table.setItem(row, 1, QTableWidgetItem(str(value)))
                     else:
-                        # Otherwise, display its string representation in one column.
                         table.setColumnCount(1)
                         table.setRowCount(1)
                         table.setHorizontalHeaderLabels(["Value"])
                         table.setItem(0, 0, QTableWidgetItem(str(broken_feature)))
-                    
+
                     group_layout.addWidget(table)
+
+                    # Create "Accept" button
+                    accept_button = QPushButton("Accept")
+                    accept_button.clicked.connect(lambda checked, bf=broken_feature: self.accept_and_next_feature(bf))
+                    group_layout.addWidget(accept_button)
+
                     layout.addWidget(group_box)
             else:
-                layout.addWidget(QLabel("No broken features available for the first feature."))
+                layout.addWidget(QLabel("No broken features available."))
         else:
-            layout.addWidget(QLabel("No data available."))
+            layout.addWidget(QLabel("All features reviewed."))
 
-        # Wrap the container frame in a QScrollArea to enable horizontal scrolling.
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setWidget(container)
-        
-        # Optionally, force the horizontal scrollbar to appear if needed.
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
+
         return scroll_area
+    
+
+    def accept_and_next_feature(self, accepted_feature):
+        """
+        Store the accepted feature separately and move to the next feature.
+        Updates features in saved_temp_layer based on feature_id, excluding primary keys.
+        """
+        if not self.data or self.current_feature_index >= len(self.data):
+            QMessageBox.information(None, "Review Complete", "All features have been reviewed.")
+            self.dialog.accept()
+            return
+
+        print(f"Accepted Feature (ID: {accepted_feature.id()}):")
+
+        if self.saved_temp_layer is not None:
+            # Get primary key attribute indices
+            primary_key_indices = self.saved_temp_layer.primaryKeyAttributes()
+            print(f"Primary key indices are : {primary_key_indices}")
+
+            # Identify the feature_id field name and value from the accepted feature
+            # Assuming 'feature_id' is a field in your layer. Adjust if different.
+            feature_id_field_name = 'feature_id'  # Replace with the actual field name
+            accepted_feature_id = accepted_feature[feature_id_field_name]
+
+            # Prepare attribute map for updating existing features
+            attributes = {}
+            fields = accepted_feature.fields() # gets the fields of accepted_feature
+            for field in fields: # looping in all the fields
+                field_index = fields.indexOf(field.name()) # get field index to check if it is a primary key
+                if field_index not in primary_key_indices: # if field is not a primary key
+                    attributes[field.name()] = accepted_feature[field.name()] # append attribute value to update in layer
+
+            # Update features in saved_temp_layer
+            with edit(self.saved_temp_layer):
+                request = QgsFeatureRequest()
+                request.setFilterExpression(f'"{feature_id_field_name}" = \'{accepted_feature_id}\'')
+                for feat in self.saved_temp_layer.getFeatures(request):
+                    # Update attributes
+                    for key, value in attributes.items():
+                        feat[key] = value
+                    self.saved_temp_layer.updateFeature(feat)
+
+            print(f"Updated features in saved_temp_layer with {feature_id_field_name} = {accepted_feature_id}")
+        else:
+            print("saved_temp_layer is None. Layer might not be initialized yet.")
+
+        # Move to the next feature
+        self.current_feature_index += 1
+        if self.current_feature_index < len(self.data):
+            new_attr_frame = self.create_attribute_tables_frame()
+            self.dialog.layout().replaceWidget(self.dialog.layout().itemAt(1).widget(), new_attr_frame)
+            self.update_canvases()
+        else:
+            QMessageBox.information(None, "Review Complete", "All features have been reviewed.")
+            self.dialog.accept()
+            
 
     def remove_layer_by_name(self, layer_name):
         """Remove a layer from the QGIS project by its name."""
@@ -197,7 +251,8 @@ class ReconstructFeatures:
         Zooms both canvases to the bounding box of the feature being verified.
         """
         if self.current_feature_index < len(self.data):  # Check if there are remaining features
-            feature_id = int(next(islice(self.data.keys(), self.current_feature_index, None)))
+            feature_ids = list(self.data.keys())
+            feature_id = feature_ids[self.current_feature_index]
             feature = next(self.selected_layer_for_processing.getFeatures(f"feature_id = {feature_id}"), None)  # Fetch the feature
 
             if feature:
