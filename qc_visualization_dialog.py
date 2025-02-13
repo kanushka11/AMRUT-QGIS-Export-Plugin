@@ -56,6 +56,7 @@ class QualityCheckVisualizationDialog(QDialog):
         try:
             newFeatureFound = verification_dialog.VerificationDialog(self.selected_layer_name, self.selected_raster_layer_name, self.amrut_file_path, self.grid_extent)
             newFeatureFound.check_for_new_features()
+            
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in show_new_feature_dialog: {str(e)}", 'AMRUT', Qgis.Critical)
 

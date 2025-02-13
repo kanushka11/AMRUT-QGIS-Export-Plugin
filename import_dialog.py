@@ -75,7 +75,7 @@ class ImportDialog(QDialog):
     def quality_check_dialog(self):
         """Quality check dialog for layer selection and validation"""
         try:
-            qc_dialog = self.create_dialog("AMRUT 2.0", 500, 250)
+            qc_dialog = self.create_dialog("AMRUT 2.0", 500, 300)
             layout = QVBoxLayout(qc_dialog)
 
             # Add logo layout
@@ -318,10 +318,10 @@ class ImportDialog(QDialog):
 
             qualityCheckVisualizationDialog.exec_()
 
-            self.file_input.clear()
             self.layer_dropdown.clear()
             self.layer_dropdown.addItem("Select any layer for Quality Check")
             self.layer_dropdown.model().item(0).setEnabled(False)
             self.raster_layer_dropdown.setCurrentIndex(0)
+
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in proceed_quality_check: {str(e)}", 'AMRUT', Qgis.Critical)

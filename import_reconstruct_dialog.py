@@ -90,7 +90,7 @@ class ReconstructLayerTabDialog(QDialog):
         self.navigation_layout.addWidget(self.next_button)
 
         layout.addLayout(self.navigation_layout)
-        self.reprojected_raster_layer = None
+        self.reprojected_raster_layer_name = None
 
     """N A V I G A T I O N      M E T H O D S"""
     def navigate_next(self):
