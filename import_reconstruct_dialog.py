@@ -129,10 +129,14 @@ class ReconstructLayerTabDialog(QDialog):
             self.tabs.addTab(self.layer_construction_tab, "Construct Layer")
             self.tabs.setCurrentIndex(layer_reconstruction_tab_index)
             print(f"Layers : {self.layers_map}")
-
+            self.navigation_layout.removeWidget(self.next_button)
+            self.next_button.deleteLater()
+            self.next_button = None
+            self.progress_bar.setVisible(False)
         else:
             error_msg = data
             self.show_error(error_msg)
+            self.thread.quit()
 
     def layer_construction_result (self, result, data) :
         if result :
@@ -171,7 +175,7 @@ class ReconstructLayerTabDialog(QDialog):
                 selected_layer = self.get_layer_by_name(self.selected_layer_for_processing)
 
                 reconstruct_feature = import_reconstruct_feature.ReconstructFeatures(
-                    selected_layer, self.saved_temp_layer, self.selected_raster_layer, data, self.progress_bar
+                    selected_layer, self.saved_temp_layer, self.selected_raster_layer, data, self.progress_bar, self.progress_lable
                 )
                 reconstruct_feature.merge_attribute_dialog()
                 selected_layer.setSubsetString("")  # Reset the filter to show all features
@@ -274,6 +278,7 @@ class ReconstructLayerTabDialog(QDialog):
                 process.process_temp_layer(layer_name)
             else:
                 try :
+                    self.progress_bar.setVisible(True)
                     self.progress_lable.setText("Constructing Layer...")
                     self.progress_bar.setRange(0, 0)
                     self.layer_construction_worker = workers.LayerConstructionWorker(self.data_dir, self.amrut_files,
@@ -284,12 +289,14 @@ class ReconstructLayerTabDialog(QDialog):
                     self.layer_construction_worker.finished.connect(self.layer_thread.quit)
                     self.layer_construction_worker.finished.connect(self.layer_construction_worker.deleteLater)
                     self.layer_thread.finished.connect(self.layer_thread.deleteLater)
+                    self.progress_bar.setVisible(False)
                     self.layer_construction_worker.result_signal.connect(self.layer_construction_result)
                     self.layer_thread.start()
                 except Exception as e :
                     raise Exception (str(e))
 
     def compare_changes(self):
+        self.progress_bar.setVisible(True)
         self.progress_lable.setText("Comparing Changes...")
         self.compare_changes_worker = workers.CompareChangesWorker(self.selected_layer_for_processing)
         self.compare_changes_thread = QThread()

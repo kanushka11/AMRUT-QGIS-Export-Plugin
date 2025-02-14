@@ -13,7 +13,7 @@ from PyQt5.QtGui import QColor
 from . import import_workers
 
 class ReconstructFeatures:
-    def __init__(self, selected_layer, saved_temp_layer, selected_raster_layer, data, progress_bar):
+    def __init__(self, selected_layer, saved_temp_layer, selected_raster_layer, data, progress_bar, progress_lable):
         self.selected_layer_for_processing = selected_layer
         self.saved_temp_layer = saved_temp_layer
         self.selected_raster_layer = selected_raster_layer
@@ -21,6 +21,7 @@ class ReconstructFeatures:
         self.reprojected_raster_layer = None
         self.current_feature_index = 0  # Initialize current_feature_index
         self.progress_bar = progress_bar
+        self.progress_lable= progress_lable
 
     def merge_attribute_dialog(self):
         """Show the dialog for verifying features in full-screen mode."""
@@ -100,7 +101,7 @@ class ReconstructFeatures:
 
             self.progress_bar.setRange(0, 100)  # Reset progress range
             self.progress_bar.setValue(100)
-
+            self.progress_lable.setText("Layer Processed")
             event_loop.quit()  # Exit event loop, allowing execution to continue
 
         # Connect the finished signal to event loop quit
