@@ -67,10 +67,20 @@ class CompareChangesWorker(QObject):
             self.finished.emit()
 
 
+class TransformRasterCRSWorker(QObject):
+    result_signal = pyqtSignal(bool, object)
+    finished = pyqtSignal()
 
+    def __init__(self, layer, raster_layer):
+        super().__init__()
+        self.layer = layer
+        self.raster_layer = raster_layer
 
-
-
-
-
-
+    def run(self):
+        try:
+            process.transform_raster_CRS(self.layer, self.raster_layer)
+            self.result_signal.emit(True, "reprojected_raster_layer")
+        except Exception as e:
+            self.result_signal.emit(False, str(e))
+        finally:
+            self.finished.emit()

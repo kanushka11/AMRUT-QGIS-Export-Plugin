@@ -174,38 +174,6 @@ class ReconstructLayerTabDialog(QDialog):
                     selected_layer, self.saved_temp_layer, self.selected_raster_layer, data
                 )
                 reconstruct_feature.merge_attribute_dialog()
-                merged_layer = self.merge_features_by_attribute(self.saved_temp_layer, "feature_id")
-
-                if self.saved_temp_layer is not None:
-                    layer_name = self.saved_temp_layer.name()
-
-                    if layer_name.startswith("Temporary_"):
-                        layer_name = layer_name[len("Temporary_"):]
-
-                    new_layer_name = layer_name + "_vetted"
-                    project = QgsProject.instance()
-                    root = project.layerTreeRoot()
-                    layer_node = root.findLayer(self.saved_temp_layer.id())
-
-                    if layer_node is not None:
-                        layer_node.setName(new_layer_name)
-                        print(f"Layer renamed in project to: {new_layer_name}")
-                    else:
-                        print("Layer node not found in layer tree.")
-
-                    if merged_layer is not None and merged_layer.isValid():
-                        QgsProject.instance().removeMapLayer(self.saved_temp_layer.id())
-                        merged_layer.setName(new_layer_name)
-                        QgsProject.instance().addMapLayer(merged_layer)
-                        self.saved_temp_layer = merged_layer
-                    else:
-                        self.saved_temp_layer.setName(new_layer_name)
-                        print("Merged layer is invalid. Only renaming existing layer.")
-
-                    self.saved_temp_layer.setName(new_layer_name)
-
-                else:
-                    print("saved_temp_layer is None, cannot rename.")
 
                 # Set progress to 100% after merging is completed
                 self.progress_bar.setRange(0, 100)
@@ -217,34 +185,6 @@ class ReconstructLayerTabDialog(QDialog):
             self.show_error(data)
             self.processing_layer = False
 
-
-    def merge_features_by_attribute(self, input_layer, attribute):
-        """
-        Merges features in a given layer based on a common attribute using QGIS's Dissolve algorithm.
-
-        :param input_layer: The input vector layer (QgsVectorLayer)
-        :param attribute: The attribute name to dissolve by (string)
-        :return: The output layer containing merged features
-        """
-        print(input_layer)
-        if not input_layer or not isinstance(input_layer, QgsVectorLayer):
-            print("Invalid input layer")
-            return None
-
-        # Define the parameters for the dissolve algorithm
-        params = {
-            'INPUT': QgsProcessingFeatureSourceDefinition(input_layer.source(), selectedFeaturesOnly=False),
-            'FIELD': [attribute],  # Field to dissolve by
-            'OUTPUT': 'memory:'  # Output to a temporary memory layer
-        }
-
-        # Run the dissolve algorithm
-        result = processing.run("native:dissolve", params)
-
-        # Get the output layer
-        output_layer = result['OUTPUT']
-        
-        return output_layer
     
     def refresh_layer_construction_tab(self):
         """Refreshes the Layer Construction Tab to update layer statuses."""
