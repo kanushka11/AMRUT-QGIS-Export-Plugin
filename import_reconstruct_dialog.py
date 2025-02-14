@@ -171,7 +171,7 @@ class ReconstructLayerTabDialog(QDialog):
                 selected_layer = self.get_layer_by_name(self.selected_layer_for_processing)
 
                 reconstruct_feature = import_reconstruct_feature.ReconstructFeatures(
-                    selected_layer, self.saved_temp_layer, self.selected_raster_layer, data
+                    selected_layer, self.saved_temp_layer, self.selected_raster_layer, data, self.progress_bar
                 )
                 reconstruct_feature.merge_attribute_dialog()
                 selected_layer.setSubsetString("")  # Reset the filter to show all features
