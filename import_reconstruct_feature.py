@@ -13,7 +13,7 @@ from . import import_workers
 import processing
 
 class ReconstructFeatures:
-    def __init__(self, selected_layer, saved_temp_layer, selected_raster_layer, data, progress_bar):
+    def __init__(self, selected_layer, saved_temp_layer, selected_raster_layer, data, progress_bar, progress_label):
         self.selected_layer_for_processing = selected_layer
         self.saved_temp_layer = saved_temp_layer
         self.selected_raster_layer = selected_raster_layer
@@ -21,6 +21,7 @@ class ReconstructFeatures:
         self.reprojected_raster_layer = None
         self.current_feature_index = 0  # Initialize current_feature_index
         self.progress_bar = progress_bar
+        self.progress_label = progress_label
 
     def merge_attribute_dialog(self):
         """Show the dialog for verifying features in full-screen mode."""
@@ -270,7 +271,7 @@ class ReconstructFeatures:
                     print("Merged layer is invalid. Only renaming existing layer.")
 
                 self.saved_temp_layer.setName(new_layer_name)
-
+                self.saved_temp_layer.setSubsetString("")
             else:
                 print("saved_temp_layer is None, cannot rename.")
 
@@ -279,7 +280,7 @@ class ReconstructFeatures:
     def merge_features_by_attribute(self, input_layer, attribute):
         """
         Merges features in a given layer based on a common attribute using QGIS's Dissolve algorithm.
-
+        
         :param input_layer: The input vector layer (QgsVectorLayer)
         :param attribute: The attribute name to dissolve by (string)
         :return: The output layer containing merged features
