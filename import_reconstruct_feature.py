@@ -13,9 +13,9 @@ from . import import_workers
 import processing
 
 class ReconstructFeatures:
-    def __init__(self, selected_layer, saved_temp_layer, selected_raster_layer, data, progress_bar, progress_lable):
+    def __init__(self, selected_layer, selected_raster_layer, data, progress_bar, progress_lable):
         self.selected_layer_for_processing = selected_layer
-        self.saved_temp_layer = saved_temp_layer
+        self.saved_temp_layer = self.get_layer_by_name("Temporary_"+selected_layer.name())
         self.selected_raster_layer = selected_raster_layer
         self.data = data 
         self.reprojected_raster_layer = None
@@ -29,8 +29,6 @@ class ReconstructFeatures:
         dialog.setWindowTitle("Merge Feature Attribute")
         # Set the dialog to full-screen (or maximized)
         dialog.setWindowState(Qt.WindowMaximized)
-        dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowCloseButtonHint)
-        dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowSystemMenuHint)
 
         main_layout = QVBoxLayout(dialog)  # Main vertical layout
 
@@ -38,8 +36,7 @@ class ReconstructFeatures:
         top_canvas_layout = QHBoxLayout()
 
         # Ensure raster transformation if needed
-        if self.selected_raster_layer and self.reprojected_raster_layer is None:
-            self.transform_raster_CRS(self.selected_layer_for_processing, self.selected_raster_layer)
+        self.transform_raster_CRS(self.selected_layer_for_processing, self.selected_raster_layer)
 
         # Create left (Original Data) and right (Vetted Data) canvases
         left_canvas_frame = self.create_canvas_frame("Original Data", self.selected_layer_for_processing)
@@ -71,11 +68,21 @@ class ReconstructFeatures:
 
     def transform_raster_CRS(self, layer, raster_layer):
         """ Initiate raster transformation with a blocking progress bar """
+        self.progress_bar.setRange(0, 0)  # Indeterminate mode
+        self.progress_bar.show()
+        if raster_layer:
+            reprojected_raster_layer_name = "Temporary_"+raster_layer.name()
+            print(reprojected_raster_layer_name)
+            self.reprojected_raster_layer = self.get_layer_by_name(reprojected_raster_layer_name)
+
         if not raster_layer or self.reprojected_raster_layer:
+            self.progress_bar.setRange(0, 100)  # Reset progress range
+            self.progress_bar.setValue(100)
+            self.progress_lable.setText("")
+            self.progress_bar.setVisible(False)
             return  # Skip if no raster or already transformed
 
         # Show progress bar (indeterminate state)
-        self.progress_bar.setRange(0, 0)  # Indeterminate mode
         self.progress_bar.show()
         QApplication.processEvents()
 
@@ -101,7 +108,8 @@ class ReconstructFeatures:
 
             self.progress_bar.setRange(0, 100)  # Reset progress range
             self.progress_bar.setValue(100)
-            self.progress_lable.setText("Layer Processed")
+            self.progress_lable.setText("")
+            self.progress_bar.setVisible(False)
             event_loop.quit()  # Exit event loop, allowing execution to continue
 
         # Connect the finished signal to event loop quit
@@ -418,3 +426,14 @@ class ReconstructFeatures:
             buffer = 0.0001  # Default buffer size for unsupported geometry types
 
         return buffer  # Return the calculated buffer size
+    
+    def get_layer_by_name(self, layer_name):
+        """Retrieve a layer from the QGIS project by its name."""
+        try:
+            for layer in QgsProject.instance().mapLayers().values():
+                if layer.name() == layer_name:
+                    return layer
+            return None
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error in get_layer_by_name: {str(e)}", 'AMRUT', Qgis.Critical)
+            return None
