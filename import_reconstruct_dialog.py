@@ -10,37 +10,31 @@ from qgis.PyQt.QtWidgets import (
     QComboBox,
     QMessageBox,
     QFileDialog,
-    QListWidget,
-    QListWidgetItem,
     QHBoxLayout,
-    QRadioButton,
-    QSpinBox,
-    QTabBar
-
+    QTabBar,
+    QApplication
 )
 from qgis.core import (
     QgsProject,
-    QgsProcessingFeedback,
     QgsMessageLog,
     Qgis,
     QgsVectorLayer,
-    QgsApplication
+    QgsProcessingFeatureSourceDefinition,
 )
-from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject, QThread, Qt
+from PyQt5.QtCore import QThread, Qt
 from PyQt5.QtGui import QPixmap
 from . import export_ui as ui
 from . import import_workers as workers
-from . import import_process_layer as process, import_construct_layer as construct
+from . import import_process_layer as process
+from . import import_reconstruct_feature
+
 from qgis.core import QgsProject, QgsMapLayer
 import os
 import sip
-
-
+import processing
 
 data_selection_tab_index = 0
 layer_reconstruction_tab_index = 1
-
-
 
 class ReconstructLayerTabDialog(QDialog):
     def __init__(self, iface):
@@ -50,7 +44,8 @@ class ReconstructLayerTabDialog(QDialog):
         self.setWindowTitle("Sankalan 2.0")
         self.setMinimumSize(700, 500)
         self.processing_layer = False
-
+        self.selected_raster_layer_name = None
+        self.saved_temp_layer = None
         # Main layout
         layout = QVBoxLayout(self)
 
@@ -82,6 +77,7 @@ class ReconstructLayerTabDialog(QDialog):
         self.navigation_layout.addWidget(self.next_button)
 
         layout.addLayout(self.navigation_layout)
+        self.reprojected_raster_layer_name = None
 
     """N A V I G A T I O N      M E T H O D S"""
     def navigate_next(self):
@@ -116,6 +112,10 @@ class ReconstructLayerTabDialog(QDialog):
                     self.layer_thread.quit()
                     self.layer_thread.wait()
 
+        for layer in QgsProject.instance().mapLayers().values():
+            if layer.subsetString():  # Check if a filter is applied
+                layer.setSubsetString("")  # Clear the filter
+
         event.accept()  # Allow the dialog to close
 
     """R E S U L T S    H A N D L I N G"""
@@ -129,30 +129,99 @@ class ReconstructLayerTabDialog(QDialog):
             self.tabs.addTab(self.layer_construction_tab, "Construct Layer")
             self.tabs.setCurrentIndex(layer_reconstruction_tab_index)
             print(f"Layers : {self.layers_map}")
-
+            self.navigation_layout.removeWidget(self.next_button)
+            self.next_button.deleteLater()
+            self.next_button = None
+            self.progress_bar.setVisible(False)
         else:
             error_msg = data
             self.show_error(error_msg)
+
     def layer_construction_result (self, result, data) :
         if result :
             self.show_success("Layer", f"Layer successfully re-constructed and saved at {data}")
             temporary_layer_name = f"Temporary_{self.selected_layer_for_processing}"
-            saved_temp_layer = QgsVectorLayer(data, temporary_layer_name, "ogr")
-            QgsProject.instance().addMapLayer(saved_temp_layer)
+            self.saved_temp_layer = QgsVectorLayer(data, temporary_layer_name, "ogr")
+            QgsProject.instance().addMapLayer(self.saved_temp_layer)
             self.compare_changes()
 
         else :
             self.show_error(data)
             self.processing_layer = False
 
+    def get_layer_by_name(self, layer_name):
+        """Retrieve a layer from the QGIS project by its name."""
+        try:
+            for layer in QgsProject.instance().mapLayers().values():
+                if layer.name() == layer_name:
+                    return layer
+            return None
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error in get_layer_by_name: {str(e)}", 'AMRUT', Qgis.Critical)
+            return None
+
     def compare_changes_result(self, result, data):
-        if result :
-            if len(data) == 0 :
-                self.show_success("Layer", "All changes processed")
-                self.processing_layer = False
-        else :
+        self.progress_bar.setRange(0, 100)
+        if result:
+            if len(data) == 0:
+                if self.saved_temp_layer is not None:
+                    layer_name = self.saved_temp_layer.name()
+
+                    if layer_name.startswith("Temporary_"):
+                        layer_name = layer_name[len("Temporary_"):]
+                    new_layer_name = layer_name + "_vetted"
+                    project = QgsProject.instance()
+                    root = project.layerTreeRoot()
+                    layer_node = root.findLayer(self.saved_temp_layer.id())
+
+                    if layer_node is not None:
+                        layer_node.setName(new_layer_name)
+                        print(f"Layer renamed in project to: {new_layer_name}")
+                    else:
+                        print("Layer node not found in layer tree.")
+
+                    self.saved_temp_layer.setName(new_layer_name)
+                    self.show_success("Layer", "All changes processed")
+                    
+                    # Refresh UI
+                    self.refresh_layer_construction_tab()
+
+                    self.progress_bar.setRange(0, 100)  # Reset progress range
+                    self.progress_bar.setValue(100)
+                    self.progress_lable.setText("Layer Processed")
+                else:
+                    print("saved_temp_layer is None, cannot rename.")
+            else:
+                self.selected_raster_layer = self.get_layer_by_name(self.selected_raster_layer_name)
+                selected_layer = self.get_layer_by_name(self.selected_layer_for_processing)
+                
+                reconstruct_feature = import_reconstruct_feature.ReconstructFeatures(
+                    selected_layer, self.selected_raster_layer, data, self.progress_bar, self.progress_lable
+                )
+                reconstruct_feature.merge_attribute_dialog()
+
+                # Refresh UI
+                self.refresh_layer_construction_tab()
+        else:
             self.show_error(data)
-            self.processing_layer = False
+
+        self.processing_layer = False
+
+    def refresh_layer_construction_tab(self):
+        """Refreshes the Layer Construction Tab to update layer statuses."""
+        # Remove the existing tab
+        index = self.tabs.indexOf(self.layer_construction_tab)
+        if index != -1:
+            self.tabs.removeTab(index)
+            self.layer_construction_tab.deleteLater()  # Clean up the old tab
+
+        # Re-create the tab
+        self.layer_construction_tab = self.create_layer_construction_tab()
+        self.tabs.addTab(self.layer_construction_tab, "Construct Layer")
+
+        # Set the current index back to the Layer Construction Tab.
+        layer_reconstruction_tab_index = 1  # Assuming it's the second tab (index 1).  Adjust if needed.
+        self.tabs.setCurrentIndex(layer_reconstruction_tab_index)
 
     """C O N S T R U C T    L A Y E R S"""
     def construct_layer (self, layer_name) :
@@ -161,9 +230,14 @@ class ReconstructLayerTabDialog(QDialog):
             self.selected_layer_for_processing = layer_name
             is_in_temporary_stage = self.is_layer_in_temporary_stage(layer_name)
             if is_in_temporary_stage :
-                process.process_temp_layer(layer_name)
+                try:
+                    data = process.process_temp_layer(layer_name)
+                    self.compare_changes_result(True, data)
+                except Exception as e:
+                    self.compare_changes_result(False, str(e))
             else:
                 try :
+                    self.progress_bar.setVisible(True)
                     self.progress_lable.setText("Constructing Layer...")
                     self.progress_bar.setRange(0, 0)
                     self.layer_construction_worker = workers.LayerConstructionWorker(self.data_dir, self.amrut_files,
@@ -174,12 +248,14 @@ class ReconstructLayerTabDialog(QDialog):
                     self.layer_construction_worker.finished.connect(self.layer_thread.quit)
                     self.layer_construction_worker.finished.connect(self.layer_construction_worker.deleteLater)
                     self.layer_thread.finished.connect(self.layer_thread.deleteLater)
+                    self.progress_bar.setVisible(False)
                     self.layer_construction_worker.result_signal.connect(self.layer_construction_result)
                     self.layer_thread.start()
                 except Exception as e :
                     raise Exception (str(e))
 
     def compare_changes(self):
+        self.progress_bar.setVisible(True)
         self.progress_lable.setText("Comparing Changes...")
         self.compare_changes_worker = workers.CompareChangesWorker(self.selected_layer_for_processing)
         self.compare_changes_thread = QThread()
@@ -224,7 +300,6 @@ class ReconstructLayerTabDialog(QDialog):
         layout.addWidget(self.raster_layer_dropdown, alignment=Qt.AlignTop)
 
         return tab
-
 
     def create_layer_construction_tab (self) :
         tab = QWidget()
@@ -276,11 +351,11 @@ class ReconstructLayerTabDialog(QDialog):
 
         # Ignore default option
         if selected_layer_name == "Select a Raster Layer":
-            self.selected_raster_layer = None
+            self.selected_raster_layer_name = None
         else:
-            self.selected_raster_layer = selected_layer_name
+            self.selected_raster_layer_name = selected_layer_name
 
-        print(f"Selected Raster Layer: {self.selected_raster_layer}")
+        print(f"Selected Raster Layer: {self.selected_raster_layer_name}")
 
     def show_error (self, error):
         self.progress_bar.setRange(0, 100)  # Reset progress bar range
@@ -298,17 +373,23 @@ class ReconstructLayerTabDialog(QDialog):
             # Override the mousePressEvent to ignore clicks
             pass
 
-    def get_layer_layout (self, layer_name):
+    def get_layer_layout(self, layer_name):
         layout = QHBoxLayout(self)
         name_label = QLabel(layer_name)
         status_icon = QLabel()
         process_button = QPushButton("Process")
 
-        layer_status_processed = self.get_layer_status(layer_name)
-        if layer_status_processed :
+        layer_status= self.get_layer_status(layer_name)
+        if layer_status == "processed":
             pixmap = ui.get_checked_icon()
+            process_button.setText("Processed")  # Change text to "Processed"
+            process_button.setEnabled(False)  # Disable the button
+        elif layer_status == "partially processed":
+            process_button.setText("Partially Processed")
+            pixmap = ui.get_warning_icon()
         else:
             pixmap = ui.get_warning_icon()
+       
         status_icon.setPixmap(pixmap)
         process_button.clicked.connect(lambda: self.construct_layer(layer_name))
 
@@ -317,15 +398,16 @@ class ReconstructLayerTabDialog(QDialog):
         layout.addWidget(status_icon)
         return layout
 
+
     def get_layer_status( self,layer_name):
         """Update the symbol based on status"""
-        processed = False
-        processed_layer_name = f"{layer_name}_vetted"
         for layer in QgsProject.instance().mapLayers().values():
-            if layer.name() == processed_layer_name:
-                processed = True
-
-        return processed
+            if layer.name() == f"{layer_name}_vetted":
+                return "processed"
+            elif layer.name() == f"Temporary_{layer_name}":
+                return "partially processed"
+        return
+    
     def is_layer_in_temporary_stage (self, layer_name) :
         print(f"Checking for Temporary layer for {layer_name} layer")
         temporary = False
@@ -352,7 +434,7 @@ class ReconstructLayerTabDialog(QDialog):
 
             # Process button
             self.process_button = QPushButton("Process")
-            self.process_button.clicked.connect(self.process_layer)
+            # self.process_button.clicked.connect(self.process_layer)
             layout.addWidget(self.process_button)
 
             # Status icon
@@ -391,6 +473,6 @@ class ReconstructLayerTabDialog(QDialog):
                 self.layout.addWidget(item)
                 self.layer_items.append(item)
 
-
         def get_layout(self):
             return self.layout
+
