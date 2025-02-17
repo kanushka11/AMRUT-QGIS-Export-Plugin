@@ -2,15 +2,15 @@ from PyQt5.QtWidgets import (
     QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame, QMessageBox,
     QTableWidget, QTableWidgetItem, QGroupBox, QSizePolicy, QHeaderView
 )
-from PyQt5.QtWidgets import QScrollArea, QGroupBox, QTableWidget, QTableWidgetItem, QApplication, QProgressBar
+from PyQt5.QtWidgets import QScrollArea, QGroupBox, QTableWidget, QTableWidgetItem, QApplication
 from PyQt5.QtCore import Qt, QThread, QEventLoop
 from qgis.core import (
-    QgsProject, QgsRectangle, QgsMessageLog, Qgis, QgsWkbTypes,
-    QgsProcessingFeedback, QgsProcessingContext, QgsRasterLayer, QgsFeature, QgsFeatureRequest, edit
+    QgsProject, QgsRectangle, QgsMessageLog, Qgis, QgsWkbTypes, QgsFeature, QgsFeatureRequest, edit, QgsVectorLayer, QgsProcessingFeatureSourceDefinition
 )
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
 from PyQt5.QtGui import QColor
 from . import import_workers
+import processing
 
 class ReconstructFeatures:
     def __init__(self, selected_layer, saved_temp_layer, selected_raster_layer, data, progress_bar, progress_lable):
@@ -241,9 +241,68 @@ class ReconstructFeatures:
             self.set_colour_opacity(self.saved_temp_layer, 1)  # Adjust the opacity for better visualization
             self.set_colour_opacity(self.selected_layer_for_processing, 1)
             QMessageBox.information(None, "Review Complete", "All features have been reviewed.")
+
+            merged_layer = self.merge_features_by_attribute(self.saved_temp_layer, "feature_id")
+
+            if self.saved_temp_layer is not None:
+                layer_name = self.saved_temp_layer.name()
+
+                if layer_name.startswith("Temporary_"):
+                    layer_name = layer_name[len("Temporary_"):]
+
+                new_layer_name = layer_name + "_vetted"
+                project = QgsProject.instance()
+                root = project.layerTreeRoot()
+                layer_node = root.findLayer(self.saved_temp_layer.id())
+
+                if layer_node is not None:
+                    layer_node.setName(new_layer_name)
+                    print(f"Layer renamed in project to: {new_layer_name}")
+                else:
+                    print("Layer node not found in layer tree.")
+
+                if merged_layer is not None and merged_layer.isValid():
+                    QgsProject.instance().removeMapLayer(self.saved_temp_layer.id())
+                    merged_layer.setName(new_layer_name)
+                    QgsProject.instance().addMapLayer(merged_layer)
+                    self.saved_temp_layer = merged_layer
+                else:
+                    self.saved_temp_layer.setName(new_layer_name)
+                    print("Merged layer is invalid. Only renaming existing layer.")
+
+                self.saved_temp_layer.setName(new_layer_name)
+                self.saved_temp_layer.setSubsetString("")
+            else:
+                print("saved_temp_layer is None, cannot rename.")
+
             self.dialog.accept()
             
+    def merge_features_by_attribute(self, input_layer, attribute):
+        """
+        Merges features in a given layer based on a common attribute using QGIS's Dissolve algorithm.
+        :param input_layer: The input vector layer (QgsVectorLayer)
+        :param attribute: The attribute name to dissolve by (string)
+        :return: The output layer containing merged features
+        """
+        print(input_layer)
+        if not input_layer or not isinstance(input_layer, QgsVectorLayer):
+            print("Invalid input layer")
+            return None
+        
+        # Define the parameters for the dissolve algorithm
+        params = {
+            'INPUT': QgsProcessingFeatureSourceDefinition(input_layer.source(), selectedFeaturesOnly=False),
+            'FIELD': [attribute],  # Field to dissolve by
+            'OUTPUT': 'memory:'  # Output to a temporary memory layer
+        }
 
+        # Run the dissolve algorithm
+        result = processing.run("native:dissolve", params)
+
+        # Get the output layer
+        output_layer = result['OUTPUT']    
+        return output_layer
+    
     def remove_layer_by_name(self, layer_name):
         """Remove a layer from the QGIS project by its name."""
         try:

@@ -33,12 +33,8 @@ import os
 import sip
 import processing
 
-
-
 data_selection_tab_index = 0
 layer_reconstruction_tab_index = 1
-
-
 
 class ReconstructLayerTabDialog(QDialog):
     def __init__(self, iface):
@@ -162,32 +158,14 @@ class ReconstructLayerTabDialog(QDialog):
             return None
 
     def compare_changes_result(self, result, data):
+        self.progress_bar.setRange(0, 100)
         if result:
             if len(data) == 0:
-                self.show_success("Layer", "All changes processed")
-                self.processing_layer = False
-            else:
-                # Set progress to 0% before starting
-                self.progress_bar.setRange(0, 0)  
-                QApplication.processEvents()  # Force UI update
-
-                self.selected_raster_layer = self.get_layer_by_name(self.selected_raster_layer_name)
-                selected_layer = self.get_layer_by_name(self.selected_layer_for_processing)
-
-                reconstruct_feature = import_reconstruct_feature.ReconstructFeatures(
-                    selected_layer, self.saved_temp_layer, self.selected_raster_layer, data, self.progress_bar, self.progress_lable
-                )
-                reconstruct_feature.merge_attribute_dialog()
-                selected_layer.setSubsetString("")  # Reset the filter to show all features
-                self.saved_temp_layer.setSubsetString("")
-                merged_layer = self.merge_features_by_attribute(self.saved_temp_layer, "feature_id")
-
                 if self.saved_temp_layer is not None:
                     layer_name = self.saved_temp_layer.name()
 
                     if layer_name.startswith("Temporary_"):
                         layer_name = layer_name[len("Temporary_"):]
-
                     new_layer_name = layer_name + "_vetted"
                     project = QgsProject.instance()
                     root = project.layerTreeRoot()
@@ -199,59 +177,35 @@ class ReconstructLayerTabDialog(QDialog):
                     else:
                         print("Layer node not found in layer tree.")
 
-                    if merged_layer is not None and merged_layer.isValid():
-                        QgsProject.instance().removeMapLayer(self.saved_temp_layer.id())
-                        merged_layer.setName(new_layer_name)
-                        QgsProject.instance().addMapLayer(merged_layer)
-                        self.saved_temp_layer = merged_layer
-                    else:
-                        self.saved_temp_layer.setName(new_layer_name)
-                        print("Merged layer is invalid. Only renaming existing layer.")
-
                     self.saved_temp_layer.setName(new_layer_name)
+                    self.show_success("Layer", "All changes processed")
+                    
+                    # Refresh UI
+                    self.refresh_layer_construction_tab()
 
+                    self.progress_bar.setRange(0, 100)  # Reset progress range
+                    self.progress_bar.setValue(100)
+                    self.progress_lable.setText("Layer Processed")
                 else:
                     print("saved_temp_layer is None, cannot rename.")
+            else:
+                self.selected_raster_layer = self.get_layer_by_name(self.selected_raster_layer_name)
+                selected_layer = self.get_layer_by_name(self.selected_layer_for_processing)
 
-                # Set progress to 100% after merging is completed
-                self.progress_bar.setRange(0, 100)
-                self.progress_bar.setValue(100)
+                reconstruct_feature = import_reconstruct_feature.ReconstructFeatures(
+                    selected_layer, self.saved_temp_layer, self.selected_raster_layer, data, self.progress_bar
+                )
+                reconstruct_feature.merge_attribute_dialog()
+
+                selected_layer.setSubsetString("")
 
                 # Refresh UI
                 self.refresh_layer_construction_tab()
         else:
             self.show_error(data)
-            self.processing_layer = False
 
+        self.processing_layer = False
 
-    def merge_features_by_attribute(self, input_layer, attribute):
-        """
-        Merges features in a given layer based on a common attribute using QGIS's Dissolve algorithm.
-
-        :param input_layer: The input vector layer (QgsVectorLayer)
-        :param attribute: The attribute name to dissolve by (string)
-        :return: The output layer containing merged features
-        """
-        print(input_layer)
-        if not input_layer or not isinstance(input_layer, QgsVectorLayer):
-            print("Invalid input layer")
-            return None
-
-        # Define the parameters for the dissolve algorithm
-        params = {
-            'INPUT': QgsProcessingFeatureSourceDefinition(input_layer.source(), selectedFeaturesOnly=False),
-            'FIELD': [attribute],  # Field to dissolve by
-            'OUTPUT': 'memory:'  # Output to a temporary memory layer
-        }
-
-        # Run the dissolve algorithm
-        result = processing.run("native:dissolve", params)
-
-        # Get the output layer
-        output_layer = result['OUTPUT']
-        
-        return output_layer
-    
     def refresh_layer_construction_tab(self):
         """Refreshes the Layer Construction Tab to update layer statuses."""
         # Remove the existing tab
@@ -342,7 +296,6 @@ class ReconstructLayerTabDialog(QDialog):
 
         return tab
 
-
     def create_layer_construction_tab (self) :
         tab = QWidget()
         layout = QVBoxLayout(tab)
@@ -415,17 +368,20 @@ class ReconstructLayerTabDialog(QDialog):
             # Override the mousePressEvent to ignore clicks
             pass
 
-    def get_layer_layout (self, layer_name):
+    def get_layer_layout(self, layer_name):
         layout = QHBoxLayout(self)
         name_label = QLabel(layer_name)
         status_icon = QLabel()
         process_button = QPushButton("Process")
 
         layer_status_processed = self.get_layer_status(layer_name)
-        if layer_status_processed :
+        if layer_status_processed:
             pixmap = ui.get_checked_icon()
+            process_button.setText("Processed")  # Change text to "Processed"
+            process_button.setEnabled(False)  # Disable the button
         else:
             pixmap = ui.get_warning_icon()
+       
         status_icon.setPixmap(pixmap)
         process_button.clicked.connect(lambda: self.construct_layer(layer_name))
 
@@ -433,6 +389,7 @@ class ReconstructLayerTabDialog(QDialog):
         layout.addWidget(process_button)
         layout.addWidget(status_icon)
         return layout
+
 
     def get_layer_status( self,layer_name):
         """Update the symbol based on status"""
@@ -507,7 +464,6 @@ class ReconstructLayerTabDialog(QDialog):
                 item = ReconstructLayerTabDialog.LayerItem(layer)
                 self.layout.addWidget(item)
                 self.layer_items.append(item)
-
 
         def get_layout(self):
             return self.layout
