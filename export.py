@@ -123,7 +123,7 @@ class AMRUT:
             self.show_error("Please ensure no layers are in editing mode before proceeding.")
             return
 
-        self.required_algorithms = ["qgis:clip", 'gdal:cliprasterbymasklayer', 'gdal:gdal2tiles', 'gdal:warpreproject']
+        self.required_algorithms = ["qgis:clip", 'gdal:cliprasterbymasklayer', 'gdal:gdal2tiles', 'gdal:warpreproject', 'gdal:warpreproject', 'gdal:cliprasterbyextent', 'native:dissolve']
         prerequisites_available = True
 
         for algorithm in self.required_algorithms:
