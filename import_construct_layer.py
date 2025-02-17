@@ -35,7 +35,7 @@ def construct_layer(directory, amrut_files, layer_name):
 
             geojson_data = zip_ref.read(layer_file_name).decode('utf-8')
             temp_dir = tempfile.gettempdir()
-            temp_geojson_file_path = os.path.join(temp_dir, f"Temporary_{layer_file_name}")
+            temp_geojson_file_path = os.path.join(temp_dir, f"Temporary_{amrut_file}_{layer_file_name}")
             print(f"Reading layer from mobile : {temp_geojson_file_path}")
             # GeoJSON data to the temporary file
             with open(temp_geojson_file_path, 'w', encoding='utf-8') as temp_geojson_file:
@@ -43,7 +43,6 @@ def construct_layer(directory, amrut_files, layer_name):
 
             geojson_layer = QgsVectorLayer(temp_geojson_file_path, layer_name, "ogr")
             layers_to_merge.append(geojson_layer)
-
 
     merge_layers(layers_to_merge)
     saved_layer_path = save_temporary_layer(layer_name)

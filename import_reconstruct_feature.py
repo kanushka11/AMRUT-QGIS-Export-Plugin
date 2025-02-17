@@ -2,26 +2,25 @@ from PyQt5.QtWidgets import (
     QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame, QMessageBox,
     QTableWidget, QTableWidgetItem, QGroupBox, QSizePolicy, QHeaderView
 )
-from PyQt5.QtWidgets import QScrollArea, QGroupBox, QTableWidget, QTableWidgetItem
-from PyQt5.QtCore import Qt, QThread
+from PyQt5.QtWidgets import QScrollArea, QGroupBox, QTableWidget, QTableWidgetItem, QApplication
+from PyQt5.QtCore import Qt, QThread, QEventLoop
 from qgis.core import (
-    QgsProject, QgsRectangle, QgsMessageLog, Qgis, QgsWkbTypes,
-    QgsProcessingFeedback, QgsProcessingContext, QgsRasterLayer, QgsFeature, QgsFeatureRequest, edit, QgsVectorLayer,
-    QgsProcessingFeatureSourceDefinition
+    QgsProject, QgsRectangle, QgsMessageLog, Qgis, QgsWkbTypes, QgsFeature, QgsFeatureRequest, edit, QgsVectorLayer, QgsProcessingFeatureSourceDefinition
 )
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
 from PyQt5.QtGui import QColor
+from . import import_workers
 import processing
-from . import import_workers as workers
 
 class ReconstructFeatures:
-    def __init__(self, selected_layer, saved_temp_layer, selected_raster_layer, data):
+    def __init__(self, selected_layer, saved_temp_layer, selected_raster_layer, data, progress_bar):
         self.selected_layer_for_processing = selected_layer
         self.saved_temp_layer = saved_temp_layer
         self.selected_raster_layer = selected_raster_layer
         self.data = data 
         self.reprojected_raster_layer = None
         self.current_feature_index = 0  # Initialize current_feature_index
+        self.progress_bar = progress_bar
 
     def merge_attribute_dialog(self):
         """Show the dialog for verifying features in full-screen mode."""
@@ -68,6 +67,54 @@ class ReconstructFeatures:
 
         self.update_canvases()
         dialog.exec_()
+
+    def transform_raster_CRS(self, layer, raster_layer):
+        """ Initiate raster transformation with a blocking progress bar """
+        if not raster_layer or self.reprojected_raster_layer:
+            return  # Skip if no raster or already transformed
+
+        # Show progress bar (indeterminate state)
+        self.progress_bar.setRange(0, 0)  # Indeterminate mode
+        self.progress_bar.show()
+        QApplication.processEvents()
+
+        self.worker = import_workers.RasterTransformWorker(layer, raster_layer)
+        self.thread = QThread()
+
+        # Move worker to thread
+        self.worker.moveToThread(self.thread)
+
+        # Connect signals
+        self.thread.started.connect(self.worker.run)
+        self.worker.progress_signal.connect(self.progress_bar.setValue)
+
+        event_loop = QEventLoop()  # Create an event loop to block execution
+
+        def on_transformation_finished(raster_layer):
+            """ Handle raster transformation completion """
+            self.reprojected_raster_layer = raster_layer
+            if raster_layer:
+                QgsProject.instance().addMapLayer(self.reprojected_raster_layer)
+            else:
+                QMessageBox.warning(None, "Error", "Raster transformation failed.")
+
+            self.progress_bar.setRange(0, 100)  # Reset progress range
+            self.progress_bar.setValue(100)
+
+            event_loop.quit()  # Exit event loop, allowing execution to continue
+
+        # Connect the finished signal to event loop quit
+        self.worker.finished_signal.connect(on_transformation_finished)
+        self.worker.finished_signal.connect(self.thread.quit)
+        self.worker.finished_signal.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+
+        # Start thread
+        self.thread.start()
+
+        # Block execution until transformation is complete
+        event_loop.exec_()
+
 
     def create_attribute_tables_frame(self):
         """
@@ -142,6 +189,8 @@ class ReconstructFeatures:
         Store the accepted feature separately and move to the next feature.
         Updates features in saved_temp_layer based on feature_id, excluding primary keys.
         """
+        self.selected_layer_for_processing.setSubsetString("")  # Reset the filter to show all features
+        self.saved_temp_layer.setSubsetString("")
         if not self.data or self.current_feature_index >= len(self.data):
             QMessageBox.information(None, "Review Complete", "All features have been reviewed.")
             self.dialog.accept()
@@ -188,6 +237,8 @@ class ReconstructFeatures:
             self.dialog.layout().replaceWidget(self.dialog.layout().itemAt(1).widget(), new_attr_frame)
             self.update_canvases()
         else:
+            self.set_colour_opacity(self.saved_temp_layer, 1)  # Adjust the opacity for better visualization
+            self.set_colour_opacity(self.selected_layer_for_processing, 1)
             QMessageBox.information(None, "Review Complete", "All features have been reviewed.")
 
             merged_layer = self.merge_features_by_attribute(self.saved_temp_layer, "feature_id")
@@ -331,8 +382,8 @@ class ReconstructFeatures:
                     centroid_point.x() + buffer,
                     centroid_point.y() + buffer
                 )
-                self.zoom_to_feature_on_canvas(extent, self.left_canvas)  # Zoom the left canvas to the feature
-                self.zoom_to_feature_on_canvas(extent, self.right_canvas)  # Zoom the right canvas to the feature
+                self.zoom_to_feature_on_canvas(extent, self.left_canvas, self.selected_layer_for_processing, feature_id)  # Zoom the left canvas to the feature
+                self.zoom_to_feature_on_canvas(extent, self.right_canvas, self.saved_temp_layer, feature_id)  # Zoom the right canvas to the feature
             else:
                 # Log a warning if the feature cannot be found
                 QgsMessageLog.logMessage(
@@ -341,8 +392,11 @@ class ReconstructFeatures:
                     Qgis.Warning
                 )            
 
-    def zoom_to_feature_on_canvas(self, extent, canvas):
+    def zoom_to_feature_on_canvas(self, extent, canvas, layer, feature_id):
         """Zoom to the feature's bounding box on the canvas."""
+        if layer:
+            # Apply a filter to show only the specific feature
+            layer.setSubsetString(f"feature_id = {feature_id}")
         canvas.setExtent(extent)  # Set the extent of the canvas
         canvas.refresh()  # Refresh the canvas to apply the changes
 
@@ -355,7 +409,7 @@ class ReconstructFeatures:
             buffer = 0.0001  # Small buffer for point geometries
         elif geometry_type == QgsWkbTypes.LineGeometry:
             line_length = geometry.length()  # Calculate the length of the line
-            buffer = line_length * 0.5  # Use half the line length as the buffer
+            buffer = line_length * 0.25  # Use half the line length as the buffer
         elif geometry_type == QgsWkbTypes.PolygonGeometry:
             bbox = geometry.boundingBox()  # Get the bounding box of the polygon
             bbox_width = bbox.width()  # Width of the bounding box
@@ -366,54 +420,4 @@ class ReconstructFeatures:
             buffer = 0.0001  # Default buffer size for unsupported geometry types
 
         return buffer  # Return the calculated buffer size
-    
-    def transform_raster_CRS(self, layer, raster_layer):
-        """Create a map canvas to render the given layer."""
-        existing_layer = None
-
-        if raster_layer and self.reprojected_raster_layer == None:
-            # Remove if a clipped and reprojected raster already exists
-            self.remove_layer_by_name(f"Temporary_{raster_layer.name()}")
-        elif raster_layer:
-            # Check if a clipped and reprojected raster already exists
-            for lyr in QgsProject.instance().mapLayers().values():
-                if lyr.name() == f"Temporary_{raster_layer.name()}" and isinstance(lyr, QgsRasterLayer):
-                    existing_layer = lyr
-                    break
-
-        if raster_layer:
-            # Raster clipping and reprojection logic
-            if existing_layer:
-                self.reprojected_raster_layer = existing_layer
-            else:
-                # Get the CRS of the grid layer (vector) and raster layer
-                grid_crs = layer.crs()
-                raster_crs = raster_layer.crs()
-                processing_context = QgsProcessingContext()
-                feedback = QgsProcessingFeedback()
-
-                # Reproject the clipped raster to the grid CRS
-                reproject_params = {
-                    'INPUT': raster_layer.source(),
-                    'SOURCE_CRS': raster_crs.authid(),  # Source CRS (from the clipped raster)
-                    'TARGET_CRS': grid_crs.authid(),    # Target CRS (grid layer CRS)
-                    'RESAMPLING': 0,                    # Nearest neighbor resampling
-                    'NODATA': -9999,                    # Specify NoData value if needed
-                    'OUTPUT': 'TEMPORARY_OUTPUT'        # Output as a temporary layer
-                }
-
-                # Run the reprojection algorithm
-                transform_result = processing.run("gdal:warpreproject", reproject_params, context=processing_context, feedback=feedback)
-
-                # Get the reprojected raster layer from the result
-                self.reprojected_raster_layer = QgsRasterLayer(transform_result['OUTPUT'], f"Temporary_{raster_layer.name()}")
-
-                # Validate the reprojected raster layer
-                if not self.reprojected_raster_layer.isValid():
-                    raise ValueError("Failed to reproject the raster layer.")
-
-                # Add the reprojected raster layer to the project
-                QgsProject.instance().addMapLayer(self.reprojected_raster_layer)
-
-                return
        
