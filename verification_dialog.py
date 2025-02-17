@@ -54,18 +54,26 @@ class VerificationDialog:
                     selected_geom = selected_feature.geometry()
                     temp_geom = temp_feature.geometry()
 
-                    if not selected_geom.equals(temp_geom):  # Check if geometries are different
-                        feature_extent = temp_geom.boundingBox()  # Get the bounding box of the feature
-                        if (grid_inward_buffer.xMinimum() <= feature_extent.xMinimum() and
-                            grid_inward_buffer.yMinimum() <= feature_extent.yMinimum() and
-                            grid_inward_buffer.xMaximum() >= feature_extent.xMaximum() and
-                            grid_inward_buffer.yMaximum() >= feature_extent.yMaximum()):
-                            # Add the feature ID to the set if the condition is satisfied
-                            changed_geometry_features.add(feature_id)
+                    if selected_geom and temp_geom:
+                        geometry_type = QgsWkbTypes.geometryType(selected_feature.geometry().wkbType())  # Get the geometry type
+
+                        # Determine the buffer size based on the geometry type
+                        if geometry_type == QgsWkbTypes.PointGeometry:
+                            if selected_geom.distance(temp_geom) > 1:  # Check if distance > 1 meter
+                                changed_geometry_features.add(feature_id)
+                        elif not selected_geom.equals(temp_geom):  # For non-point geometries
+                            feature_extent = temp_geom.boundingBox()  # Get the bounding box of the feature
+                            if (grid_inward_buffer.xMinimum() <= feature_extent.xMinimum() and
+                                grid_inward_buffer.yMinimum() <= feature_extent.yMinimum() and
+                                grid_inward_buffer.xMaximum() >= feature_extent.xMaximum() and
+                                grid_inward_buffer.yMaximum() >= feature_extent.yMaximum()):
+                                # Add the feature ID to the set if the condition is satisfied
+                                changed_geometry_features.add(feature_id)
 
             # Store the changed geometry feature IDs for further processing
             self.changed_geometry_features = changed_geometry_features
             self.show_new_features_dialog(self.changed_geometry_features, "Geometry Changes")
+
 
     def show_new_features_dialog(self, feature_ids, title):
         """
@@ -232,8 +240,8 @@ class VerificationDialog:
                     centroid_point.x() + buffer,
                     centroid_point.y() + buffer
                 )
-                self.zoom_to_feature_on_canvas(extent, self.left_canvas)  # Zoom the left canvas to the feature
-                self.zoom_to_feature_on_canvas(extent, self.right_canvas)  # Zoom the right canvas to the feature
+                self.zoom_to_feature_on_canvas(extent, self.left_canvas,self.selected_layer,feature_id)  # Zoom the left canvas to the feature
+                self.zoom_to_feature_on_canvas(extent, self.right_canvas,self.temporary_layer,feature_id)  # Zoom the right canvas to the feature
             else:
                 # Log a warning if the feature cannot be found
                 QgsMessageLog.logMessage(
@@ -242,8 +250,11 @@ class VerificationDialog:
                     Qgis.Warning
                 )            
 
-    def zoom_to_feature_on_canvas(self, extent, canvas):
+    def zoom_to_feature_on_canvas(self, extent, canvas,layer,feature_id):
         """Zoom to the feature's bounding box on the canvas."""
+        if layer:
+            # Apply a filter to show only the specific feature
+            layer.setSubsetString(f"feature_id = {feature_id}")
         canvas.setExtent(extent)  # Set the extent of the canvas
         canvas.refresh()  # Refresh the canvas to apply the changes
 
@@ -282,6 +293,8 @@ class VerificationDialog:
         Move to the next feature in the list.
         If no more features remain, close the dialog.
         """
+        self.selected_layer.setSubsetString("")  # Reset the filter to show all features
+        self.temporary_layer.setSubsetString("")
         self.current_feature_index += 1  # Increment the feature index
         if self.current_feature_index < len(feature_ids):  # Check if there are more features
             self.update_canvases(feature_ids)  # Update canvases to display the next feature
@@ -311,7 +324,7 @@ class VerificationDialog:
             buffer = 0.0001  # Small buffer for point geometries
         elif geometry_type == QgsWkbTypes.LineGeometry:
             line_length = geometry.length()  # Calculate the length of the line
-            buffer = line_length * 0.5  # Use half the line length as the buffer
+            buffer = line_length * 0.25  # Use half the line length as the buffer
         elif geometry_type == QgsWkbTypes.PolygonGeometry:
             bbox = geometry.boundingBox()  # Get the bounding box of the polygon
             bbox_width = bbox.width()  # Width of the bounding box
@@ -326,8 +339,8 @@ class VerificationDialog:
     def create_inward_buffer(self, grid_extent):
         # Calculate the conversion factor for meters to degrees based on latitude
         avg_lat = (grid_extent.yMinimum() + grid_extent.yMaximum()) / 2
-        meters_to_degrees_lat = 1 / 111320  # 1 meter in latitude degrees
-        meters_to_degrees_lon = 1 / (111320 * cos(radians(avg_lat)))  # 1 meter in longitude degrees
+        meters_to_degrees_lat = 10 / 111320  # 1 meter in latitude degrees
+        meters_to_degrees_lon = 10 / (111320 * cos(radians(avg_lat)))  # 1 meter in longitude degrees
 
         # Create a new extent by shrinking the grid extent inward by 1 meter
         inward_buffered_extent = QgsRectangle(
@@ -455,11 +468,7 @@ class VerificationDialog:
                 f"GeoJSON file '{geojson_filename}' successfully replaced in the AMRUT file. QC Status: {qc_status}",
                 "AMRUT",
                 Qgis.Info
-            )
-
-            if all_verified:
-                QMessageBox.information(None, "File Verified", "All layers of this file has been verified.")
-            
+            )  
         except Exception as e:
             QgsMessageLog.logMessage(f"Error replacing GeoJSON in AMRUT file: {str(e)}", "AMRUT", Qgis.Critical)
         finally:
