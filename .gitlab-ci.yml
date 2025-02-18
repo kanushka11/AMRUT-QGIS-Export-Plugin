@@ -1,8 +1,0 @@
-pages:
-  stage: deploy
-  script:
-    - mkdir -p public
-    - cp -r web/* public/
-  artifacts:
-    paths:
-      - public
