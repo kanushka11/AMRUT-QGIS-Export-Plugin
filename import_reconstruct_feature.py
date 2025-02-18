@@ -5,12 +5,15 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtWidgets import QScrollArea, QGroupBox, QTableWidget, QTableWidgetItem, QApplication
 from PyQt5.QtCore import Qt, QThread, QEventLoop
 from qgis.core import (
-    QgsProject, QgsRectangle, QgsMessageLog, Qgis, QgsWkbTypes, QgsFeature, QgsFeatureRequest, edit, QgsVectorLayer, QgsProcessingFeatureSourceDefinition
+    QgsProject, QgsRectangle, QgsMessageLog, Qgis, QgsWkbTypes, QgsFeature, QgsFeatureRequest, edit, QgsVectorLayer, QgsProcessingFeatureSourceDefinition, QgsCategorizedSymbolRenderer, QgsRenderContext, QgsSingleSymbolRenderer,
+    QgsRendererCategory,
+    QgsSymbol,
 )
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
 from PyQt5.QtGui import QColor
 from . import import_workers
 import processing
+import random
 
 class ReconstructFeatures:
     def __init__(self, selected_layer, selected_raster_layer, data, progress_bar, progress_lable):
@@ -23,6 +26,32 @@ class ReconstructFeatures:
         self.progress_bar = progress_bar
         self.progress_lable= progress_lable
 
+    def apply_colour(self, layer):
+        renderer = QgsCategorizedSymbolRenderer("$id", [])  # Use $id (QGIS internal unique feature ID)
+
+        for feature in layer.getFeatures():
+            unique_id = feature.id()  # Use feature ID to ensure uniqueness
+            color = QColor(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))  # Generate random color
+            symbol = QgsSymbol.defaultSymbol(layer.geometryType())
+            symbol.setColor(color)
+            if layer.geometryType() == QgsWkbTypes.LineGeometry:
+                symbol.setWidth(symbol.width() * 5)  # Apply width increase again
+            
+            category = QgsRendererCategory(unique_id, symbol, f"Feature {unique_id}")
+            renderer.addCategory(category)
+
+        layer.setRenderer(renderer)
+        layer.triggerRepaint()
+
+    def increase_line_width(self, layer):
+        if layer.geometryType() == QgsWkbTypes.LineGeometry:
+            symbol = QgsSymbol.defaultSymbol(layer.geometryType())
+            symbol.setWidth(symbol.width() * 5)  # Increase width
+            
+            # Apply a new renderer with the modified symbol
+            layer.setRenderer(QgsSingleSymbolRenderer(symbol))
+            layer.triggerRepaint()  # Refresh the layer
+
     def merge_attribute_dialog(self):
         """Show the dialog for verifying features in full-screen mode."""
         dialog = QDialog(None)
@@ -34,7 +63,8 @@ class ReconstructFeatures:
 
         # Create a horizontal layout for left and right canvases (Top Section)
         top_canvas_layout = QHBoxLayout()
-
+        self.apply_colour(self.saved_temp_layer)
+        self.increase_line_width(self.selected_layer_for_processing)
         # Ensure raster transformation if needed
         self.transform_raster_CRS(self.selected_layer_for_processing, self.selected_raster_layer)
 
@@ -246,8 +276,6 @@ class ReconstructFeatures:
             self.dialog.layout().replaceWidget(self.dialog.layout().itemAt(1).widget(), new_attr_frame)
             self.update_canvases()
         else:
-            self.set_colour_opacity(self.saved_temp_layer, 1)  # Adjust the opacity for better visualization
-            self.set_colour_opacity(self.selected_layer_for_processing, 1)
             QMessageBox.information(None, "Review Complete", "All features have been reviewed.")
 
             merged_layer = self.merge_features_by_attribute(self.saved_temp_layer, "feature_id")
@@ -345,9 +373,11 @@ class ReconstructFeatures:
     
     def set_colour_opacity(self, layer, opacity):
         """Set the opacity of the layer for visualization."""
-        symbol = layer.renderer().symbol()  # Get the symbol for the layer          
-        if symbol:
-            symbol.setOpacity(opacity)  # Set the opacity of the symbol
+        context = QgsRenderContext()
+        symbols = layer.renderer().symbols(context)
+         
+        for symbol in symbols:  # Iterate over all symbols in the list
+            symbol.setOpacity(opacity)  # Set the opacity for each symbol
         layer.triggerRepaint()  # Trigger a repaint to apply the change
 
     def synchronize_right_canvas(self):

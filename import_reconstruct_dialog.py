@@ -19,7 +19,7 @@ from qgis.core import (
     QgsMessageLog,
     Qgis,
     QgsVectorLayer,
-    QgsProcessingFeatureSourceDefinition,
+    QgsRenderContext
 )
 from PyQt5.QtCore import QThread, Qt
 from PyQt5.QtGui import QPixmap
@@ -29,9 +29,7 @@ from . import import_process_layer as process
 from . import import_reconstruct_feature
 
 from qgis.core import QgsProject, QgsMapLayer
-import os
 import sip
-import processing
 
 data_selection_tab_index = 0
 layer_reconstruction_tab_index = 1
@@ -475,4 +473,5 @@ class ReconstructLayerTabDialog(QDialog):
 
         def get_layout(self):
             return self.layout
+        
 
