@@ -75,11 +75,11 @@ class ImportDialog(QDialog):
     def quality_check_dialog(self):
         """Quality check dialog for layer selection and validation"""
         try:
-            qc_dialog = self.create_dialog("AMRUT 2.0", 500, 300)
+            qc_dialog = self.create_dialog("AMRUT 2.0", 500, 350)
             layout = QVBoxLayout(qc_dialog)
 
             # Add logo layout
-            logo_layout = ui.createLogoLayout("")
+            logo_layout = ui.createLogoLayout("Quality Check")
             layout.addLayout(logo_layout)
             layout.addSpacing(10)
 

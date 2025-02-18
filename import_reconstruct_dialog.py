@@ -49,7 +49,7 @@ class ReconstructLayerTabDialog(QDialog):
         self.setMinimumSize(700, 500)
         self.processing_layer = False
         self.selected_raster_layer_name = None
-
+        self.saved_temp_layer = None
         # Main layout
         layout = QVBoxLayout(self)
 
@@ -115,6 +115,10 @@ class ReconstructLayerTabDialog(QDialog):
                 if self.layer_thread.isRunning():
                     self.layer_thread.quit()
                     self.layer_thread.wait()
+
+        for layer in QgsProject.instance().mapLayers().values():
+            if layer.subsetString():  # Check if a filter is applied
+                layer.setSubsetString("")  # Clear the filter
 
         event.accept()  # Allow the dialog to close
 
@@ -197,13 +201,11 @@ class ReconstructLayerTabDialog(QDialog):
             else:
                 self.selected_raster_layer = self.get_layer_by_name(self.selected_raster_layer_name)
                 selected_layer = self.get_layer_by_name(self.selected_layer_for_processing)
-
+                
                 reconstruct_feature = import_reconstruct_feature.ReconstructFeatures(
-                    selected_layer, self.saved_temp_layer, self.selected_raster_layer, data, self.progress_bar, self.progress_lable
+                    selected_layer, self.selected_raster_layer, data, self.progress_bar, self.progress_lable
                 )
                 reconstruct_feature.merge_attribute_dialog()
-
-                selected_layer.setSubsetString("")
 
                 # Refresh UI
                 self.refresh_layer_construction_tab()
@@ -236,7 +238,11 @@ class ReconstructLayerTabDialog(QDialog):
             self.selected_layer_for_processing = layer_name
             is_in_temporary_stage = self.is_layer_in_temporary_stage(layer_name)
             if is_in_temporary_stage :
-                process.process_temp_layer(layer_name)
+                try:
+                    data = process.process_temp_layer(layer_name)
+                    self.compare_changes_result(True, data)
+                except Exception as e:
+                    self.compare_changes_result(False, str(e))
             else:
                 try :
                     self.progress_bar.setVisible(True)
@@ -381,11 +387,14 @@ class ReconstructLayerTabDialog(QDialog):
         status_icon = QLabel()
         process_button = QPushButton("Process")
 
-        layer_status_processed = self.get_layer_status(layer_name)
-        if layer_status_processed:
+        layer_status= self.get_layer_status(layer_name)
+        if layer_status == "processed":
             pixmap = ui.get_checked_icon()
             process_button.setText("Processed")  # Change text to "Processed"
             process_button.setEnabled(False)  # Disable the button
+        elif layer_status == "partially processed":
+            process_button.setText("Partially Processed")
+            pixmap = ui.get_warning_icon()
         else:
             pixmap = ui.get_warning_icon()
         
@@ -399,12 +408,12 @@ class ReconstructLayerTabDialog(QDialog):
 
     def get_layer_status( self,layer_name):
         """Update the symbol based on status"""
-        processed = False
-        processed_layer_name = f"{layer_name}_vetted"
         for layer in QgsProject.instance().mapLayers().values():
-            if layer.name() == processed_layer_name:
-                processed = True
-        return processed
+            if layer.name() == f"{layer_name}_vetted":
+                return "processed"
+            elif layer.name() == f"Temporary_{layer_name}":
+                return "partially processed"
+        return
     
     def is_layer_in_temporary_stage (self, layer_name) :
         print(f"Checking for Temporary layer for {layer_name} layer")

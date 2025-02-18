@@ -25,10 +25,10 @@ class AmrutFilesValidationWorker(QObject) :
                 self.result_signal.emit(True, validation_result[1])
             else :
                 self.result_signal.emit(False, validation_result[1])
-            self.finished.emmit()
+            self.finished.emit()
         except Exception as e :
-            self.result_signal.emmit(False, str(e))
-            self.finished.emmit()
+            self.result_signal.emit(False, str(e))
+            self.finished.emit()
 
 
 class LayerConstructionWorker (QObject) :
