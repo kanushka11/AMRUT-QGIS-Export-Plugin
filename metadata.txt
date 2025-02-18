@@ -12,8 +12,8 @@ email=amrut@iirs.gov.in
 
 about= To be used in Sankalan 2.0 Mobile Application for transfer of data to and from mobile app. This QGIS Plugin is Designed and Developed by India Institute of Remote Sensing, ISRO Dehradun under AMRUT Phase -2 Programme of Ministry of Housing and Urban Affairs, Government of India, © IIRS, ISRO
 
-tracker=https://git.iirs.gov.in/amrut/amrut_qgis_export_plugin/-/issues
-repository=https://git.iirs.gov.in/amrut/amrut_qgis_export_plugin/
+tracker=https://gitlab.com/iirs-amrut/amrut-qgis-plugin/-/issues
+repository=https://gitlab.com/iirs-amrut/amrut-qgis-plugin
 # End of mandatory metadata
 
 # Recommended items:
@@ -25,7 +25,7 @@ hasProcessingProvider=no
 # Tags are comma separated with spaces allowed
 tags=python
 
-homepage=https://amrut.iirs.gov.in/
+homepage=https://amrut-qgis-plugin-899fcf.gitlab.io/
 category=Plugins
 icon=icon.png
 # experimental flag
