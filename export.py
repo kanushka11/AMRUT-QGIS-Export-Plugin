@@ -48,7 +48,7 @@ class AMRUT:
 
         # Declare instance attributes
         self.actions = []
-        self.menu = self.tr(u'&AMRUT')
+        self.menu = self.tr(u'&Sankalan2.0')
 
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
@@ -56,7 +56,7 @@ class AMRUT:
 
     def tr(self, message):
         """Get the translation for a string using Qt translation API."""
-        return QCoreApplication.translate('AMRUT', message)
+        return QCoreApplication.translate('Sankalan2.0', message)
 
     def add_action(self, icon_path, text, callback, enabled_flag=True, add_to_menu=True, add_to_toolbar=True, status_tip=None, whats_this=None, parent=None):
         """Add a toolbar icon to the toolbar."""
@@ -83,8 +83,8 @@ class AMRUT:
 
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
-        icon_path = ':/plugins/export/icon.png'
-        self.add_action(icon_path, text=self.tr(u'AMRUT'), callback=self.run, parent=self.iface.mainWindow())
+        icon_path = 'icon.png'
+        self.add_action(icon_path, text=self.tr(u'Sanakalan2.0'), callback=self.run, parent=self.iface.mainWindow())
 
         # will be set False in run()
         self.first_start = True
@@ -92,7 +92,7 @@ class AMRUT:
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
-            self.iface.removePluginMenu(self.tr(u'&AMRUT'), action)
+            self.iface.removePluginMenu(self.tr(u'&Sankalan2.0'), action)
             self.iface.removeToolBarIcon(action)
     
     def run(self):
@@ -187,7 +187,7 @@ class AMRUT:
         error_dialog.exec_()  # Show the dialog modally
 
         # Log the error in the QGIS message log
-        QgsMessageLog.logMessage(str(error), 'AMRUT', Qgis.Critical)
+        QgsMessageLog.logMessage(str(error), 'Sankalan2.0', Qgis.Critical)
 
     def is_project_saved(self):
         """Check if the QGIS project is saved."""
