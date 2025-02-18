@@ -277,6 +277,13 @@ def get_checked_icon():
     logo_size = (24, 24)
     checked_logo = QPixmap(checked_logo_path).scaled(logo_size[0], logo_size[1], Qt.KeepAspectRatio,Qt.SmoothTransformation)
     return checked_logo
+def get_icon():
+    pwd = os.path.dirname(os.path.abspath(__file__))
+    assets_dir = os.path.join(pwd, "assets")
+    icon_name = "iirs.png"
+    icon_path = os.path.join(assets_dir, icon_name)
+    icon = QIcon(icon_path)
+    return icon
 
 
 

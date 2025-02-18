@@ -5,12 +5,12 @@
 [general]
 name=Sankalan 2.0
 qgisMinimumVersion=3.0
-description=Data to and from Sankalan 2.0 Mobile application.
+description=For Sankalan 2.0 Mobile Application.
 version=0.3
 author=Indian Institute of Remote Sensing, ISRO
 email=amrut@iirs.gov.in
 
-about= Implemented for Export data to Mobile App for  Attribute collection under AMRUT 2.0
+about= To be used in Sankalan 2.0 Mobile Application for transfer of data to and from mobile app. This QGIS Plugin is Designed and Developed by India Institute of Remote Sensing, ISRO Dehradun under AMRUT Phase -2 Programme of Ministry of Housing and Urban Affairs, Government of India, © IIRS, ISRO
 
 tracker=https://git.iirs.gov.in/amrut/amrut_qgis_export_plugin/-/issues
 repository=https://git.iirs.gov.in/amrut/amrut_qgis_export_plugin/

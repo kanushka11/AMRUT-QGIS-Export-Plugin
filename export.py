@@ -8,6 +8,7 @@ from . import import_dialog
 
 import processing
 import os
+from. import export_ui as ui
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -39,7 +40,7 @@ class AMRUT:
         locale_path = os.path.join(
             self.plugin_dir,
             'i18n',
-            'AMRUT_{}.qm'.format(locale))
+            'Sankalan_{}.qm'.format(locale))
 
         if os.path.exists(locale_path):
             self.translator = QTranslator()
@@ -58,9 +59,9 @@ class AMRUT:
         """Get the translation for a string using Qt translation API."""
         return QCoreApplication.translate('Sankalan2.0', message)
 
-    def add_action(self, icon_path, text, callback, enabled_flag=True, add_to_menu=True, add_to_toolbar=True, status_tip=None, whats_this=None, parent=None):
+    def add_action(self, text, callback, enabled_flag=True, add_to_menu=True, add_to_toolbar=True, status_tip=None, whats_this=None, parent=None):
         """Add a toolbar icon to the toolbar."""
-        icon = QIcon(icon_path)
+        icon = ui.get_icon()
         action = QAction(icon, text, parent)
         action.triggered.connect(callback)
         action.setEnabled(enabled_flag)
@@ -83,8 +84,7 @@ class AMRUT:
 
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
-        icon_path = 'icon.png'
-        self.add_action(icon_path, text=self.tr(u'Sanakalan2.0'), callback=self.run, parent=self.iface.mainWindow())
+        self.add_action( text=self.tr(u'Sanakalan 2.0'), callback=self.run, parent=self.iface.mainWindow())
 
         # will be set False in run()
         self.first_start = True
