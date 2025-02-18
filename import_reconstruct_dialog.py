@@ -358,6 +358,7 @@ class ReconstructLayerTabDialog(QDialog):
         print(f"Selected Raster Layer: {self.selected_raster_layer_name}")
 
     def show_error (self, error):
+        print("HHHHHHHHHHHHHHHHHHHHH")
         self.progress_bar.setRange(0, 100)  # Reset progress bar range
         self.progress_lable.setText("")
         QMessageBox.critical(self,"Error", str(error))
