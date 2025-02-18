@@ -3,9 +3,9 @@
 # This file should be included when you package your plugin.# Mandatory items:
 
 [general]
-name=AMRUT 2.0 Export Data
+name=Sankalan 2.0
 qgisMinimumVersion=3.0
-description=Clips layers to a desired grid, merges geometry, and exports as GeoJSON and PNG.
+description=Data to and from Sankalan 2.0 Mobile application.
 version=0.3
 author=Indian Institute of Remote Sensing, ISRO
 email=amrut@iirs.gov.in
