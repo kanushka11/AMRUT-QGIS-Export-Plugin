@@ -33,12 +33,8 @@ import os
 import sip
 import processing
 
-
-
 data_selection_tab_index = 0
 layer_reconstruction_tab_index = 1
-
-
 
 class ReconstructLayerTabDialog(QDialog):
     def __init__(self, iface):
@@ -166,7 +162,6 @@ class ReconstructLayerTabDialog(QDialog):
 
     def compare_changes_result(self, result, data):
         self.progress_bar.setRange(0, 100)
-
         if result:
             if len(data) == 0:
                 if self.saved_temp_layer is not None:
@@ -174,7 +169,6 @@ class ReconstructLayerTabDialog(QDialog):
 
                     if layer_name.startswith("Temporary_"):
                         layer_name = layer_name[len("Temporary_"):]
-
                     new_layer_name = layer_name + "_vetted"
                     project = QgsProject.instance()
                     root = project.layerTreeRoot()
@@ -187,9 +181,8 @@ class ReconstructLayerTabDialog(QDialog):
                         print("Layer node not found in layer tree.")
 
                     self.saved_temp_layer.setName(new_layer_name)
-                    
                     self.show_success("Layer", "All changes processed")
-
+                    
                     # Refresh UI
                     self.refresh_layer_construction_tab()
 
@@ -211,10 +204,9 @@ class ReconstructLayerTabDialog(QDialog):
                 self.refresh_layer_construction_tab()
         else:
             self.show_error(data)
-        
+
         self.processing_layer = False
 
-    
     def refresh_layer_construction_tab(self):
         """Refreshes the Layer Construction Tab to update layer statuses."""
         # Remove the existing tab
@@ -256,6 +248,7 @@ class ReconstructLayerTabDialog(QDialog):
                     self.layer_construction_worker.finished.connect(self.layer_thread.quit)
                     self.layer_construction_worker.finished.connect(self.layer_construction_worker.deleteLater)
                     self.layer_thread.finished.connect(self.layer_thread.deleteLater)
+                    self.progress_bar.setVisible(False)
                     self.layer_construction_worker.result_signal.connect(self.layer_construction_result)
                     self.layer_thread.start()
                 except Exception as e :
@@ -307,7 +300,6 @@ class ReconstructLayerTabDialog(QDialog):
         layout.addWidget(self.raster_layer_dropdown, alignment=Qt.AlignTop)
 
         return tab
-
 
     def create_layer_construction_tab (self) :
         tab = QWidget()
@@ -397,7 +389,7 @@ class ReconstructLayerTabDialog(QDialog):
             pixmap = ui.get_warning_icon()
         else:
             pixmap = ui.get_warning_icon()
-        
+       
         status_icon.setPixmap(pixmap)
         process_button.clicked.connect(lambda: self.construct_layer(layer_name))
 
@@ -405,6 +397,7 @@ class ReconstructLayerTabDialog(QDialog):
         layout.addWidget(process_button)
         layout.addWidget(status_icon)
         return layout
+
 
     def get_layer_status( self,layer_name):
         """Update the symbol based on status"""
@@ -479,7 +472,6 @@ class ReconstructLayerTabDialog(QDialog):
                 item = ReconstructLayerTabDialog.LayerItem(layer)
                 self.layout.addWidget(item)
                 self.layer_items.append(item)
-
 
         def get_layout(self):
             return self.layout

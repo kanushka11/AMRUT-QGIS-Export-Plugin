@@ -284,11 +284,10 @@ class ReconstructFeatures:
                 print("saved_temp_layer is None, cannot rename.")
 
             self.dialog.accept()
-
+            
     def merge_features_by_attribute(self, input_layer, attribute):
         """
         Merges features in a given layer based on a common attribute using QGIS's Dissolve algorithm.
-        
         :param input_layer: The input vector layer (QgsVectorLayer)
         :param attribute: The attribute name to dissolve by (string)
         :return: The output layer containing merged features
@@ -297,7 +296,7 @@ class ReconstructFeatures:
         if not input_layer or not isinstance(input_layer, QgsVectorLayer):
             print("Invalid input layer")
             return None
-
+        
         # Define the parameters for the dissolve algorithm
         params = {
             'INPUT': QgsProcessingFeatureSourceDefinition(input_layer.source(), selectedFeaturesOnly=False),
@@ -309,11 +308,9 @@ class ReconstructFeatures:
         result = processing.run("native:dissolve", params)
 
         # Get the output layer
-        output_layer = result['OUTPUT']
-        
+        output_layer = result['OUTPUT']    
         return output_layer
-            
-
+    
     def remove_layer_by_name(self, layer_name):
         """Remove a layer from the QGIS project by its name."""
         try:
