@@ -114,6 +114,8 @@ class ReconstructLayerTabDialog(QDialog):
             if layer.subsetString():  # Check if a filter is applied
                 layer.setSubsetString("")  # Clear the filter
 
+        QgsProject.instance().write()
+
         event.accept()  # Allow the dialog to close
 
     """R E S U L T S    H A N D L I N G"""

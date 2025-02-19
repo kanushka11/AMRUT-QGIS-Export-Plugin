@@ -175,6 +175,7 @@ class VerificationDialog:
         self.is_synchronizing = False  # Flag to avoid recursive synchronization
         self.left_canvas.extentsChanged.connect(self.synchronize_right_canvas)
         self.right_canvas.extentsChanged.connect(self.synchronize_left_canvas)
+        self.setup_panning()
 
         accept_button.clicked.connect(lambda: self.move_to_next_feature(feature_ids))
         reject_button.clicked.connect(lambda: self.reject_feature(feature_ids))
@@ -198,6 +199,18 @@ class VerificationDialog:
             self.left_canvas.setExtent(self.right_canvas.extent())  # Set the extent of the left canvas to match the right canvas
             self.left_canvas.refresh()  # Refresh the left canvas to update its display
             self.is_synchronizing = False  # Reset the synchronization flag
+
+    def setup_panning(self):
+        """Enable panning on both canvases."""
+        try:
+            if self.left_canvas and self.right_canvas:
+                self.left_pan_tool = QgsMapToolPan(self.left_canvas)
+                self.right_pan_tool = QgsMapToolPan(self.right_canvas)
+
+                self.left_canvas.setMapTool(self.left_pan_tool)
+                self.right_canvas.setMapTool(self.right_pan_tool)
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error in setup_panning: {str(e)}", 'AMRUT', Qgis.Critical)
 
     def create_canvas_frame(self, label_text, layer):
         """Create a frame with a label and a map canvas."""

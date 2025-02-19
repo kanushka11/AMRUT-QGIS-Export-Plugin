@@ -1,19 +1,20 @@
 from PyQt5.QtWidgets import (
     QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame, QMessageBox,
-    QTableWidget, QTableWidgetItem, QGroupBox, QSizePolicy, QHeaderView
+    QTableWidget, QTableWidgetItem, QGroupBox, QSizePolicy, QHeaderView,
+    QScrollArea, QGroupBox, QApplication, QWidget
 )
-from PyQt5.QtWidgets import QScrollArea, QGroupBox, QTableWidget, QTableWidgetItem, QApplication
 from PyQt5.QtCore import Qt, QThread, QEventLoop
+from PyQt5.QtGui import QPixmap, QColor
 from qgis.core import (
     QgsProject, QgsRectangle, QgsMessageLog, Qgis, QgsWkbTypes, QgsFeature, QgsFeatureRequest, edit, QgsVectorLayer, QgsProcessingFeatureSourceDefinition, QgsCategorizedSymbolRenderer, QgsRenderContext, QgsSingleSymbolRenderer,
     QgsRendererCategory,
     QgsSymbol,
 )
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
-from PyQt5.QtGui import QColor
 from . import import_workers
 import processing
 import random
+import base64
 
 class ReconstructFeatures:
     def __init__(self, selected_layer, selected_raster_layer, data, progress_bar, progress_lable):
@@ -24,7 +25,33 @@ class ReconstructFeatures:
         self.reprojected_raster_layer = None
         self.current_feature_index = 0  # Initialize current_feature_index
         self.progress_bar = progress_bar
-        self.progress_lable= progress_lable
+        self.progress_lable = progress_lable
+
+    def apply_colour(self, layer):
+        renderer = QgsCategorizedSymbolRenderer("$id", [])  # Use $id (QGIS internal unique feature ID)
+
+        for feature in layer.getFeatures():
+            unique_id = feature.id()  # Use feature ID to ensure uniqueness
+            color = QColor(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))  # Generate random color
+            symbol = QgsSymbol.defaultSymbol(layer.geometryType())
+            symbol.setColor(color)
+            if layer.geometryType() == QgsWkbTypes.LineGeometry:
+                symbol.setWidth(symbol.width() * 5)  # Apply width increase again
+            
+            category = QgsRendererCategory(unique_id, symbol, f"Feature {unique_id}")
+            renderer.addCategory(category)
+
+        layer.setRenderer(renderer)
+        layer.triggerRepaint()
+
+    def increase_line_width(self, layer):
+        if layer.geometryType() == QgsWkbTypes.LineGeometry:
+            symbol = QgsSymbol.defaultSymbol(layer.geometryType())
+            symbol.setWidth(symbol.width() * 5)  # Increase width
+            
+            # Apply a new renderer with the modified symbol
+            layer.setRenderer(QgsSingleSymbolRenderer(symbol))
+            layer.triggerRepaint()  # Refresh the layer
 
     def apply_colour(self, layer):
         renderer = QgsCategorizedSymbolRenderer("$id", [])  # Use $id (QGIS internal unique feature ID)
@@ -88,10 +115,11 @@ class ReconstructFeatures:
         self.right_canvas = right_canvas_frame.findChild(QgsMapCanvas)
         # No canvas is created in the bottom section, so we do not assign self.bottom_canvas
 
-        # Synchronize the top two canvases
-        self.is_synchronizing = False
+        # Synchronize the views of both canvases
+        self.is_synchronizing = False  # Flag to avoid recursive synchronization
         self.left_canvas.extentsChanged.connect(self.synchronize_right_canvas)
         self.right_canvas.extentsChanged.connect(self.synchronize_left_canvas)
+        self.setup_panning()
 
         self.update_canvases()
         dialog.exec_()
@@ -154,7 +182,6 @@ class ReconstructFeatures:
         # Block execution until transformation is complete
         event_loop.exec_()
 
-
     def create_attribute_tables_frame(self):
         """
         Create a QFrame that displays attribute tables (horizontally)
@@ -165,12 +192,14 @@ class ReconstructFeatures:
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(10)
 
-        # Ensure we are within the feature index range
         if self.current_feature_index < len(self.data):
             feature_id = list(self.data.keys())[self.current_feature_index]
             broken_features = self.data[feature_id]
 
             if broken_features:
+                # Create a list to store the tables for synchronization
+                tables = []
+
                 for idx, broken_feature in enumerate(broken_features, start=1):
                     group_box = QGroupBox(f"Broken Feature {idx}")
                     group_layout = QVBoxLayout(group_box)
@@ -193,8 +222,28 @@ class ReconstructFeatures:
                         for row in range(num_fields):
                             field_name = fields.at(row).name()
                             value = broken_feature.attribute(field_name)
+
                             table.setItem(row, 0, QTableWidgetItem(field_name))
-                            table.setItem(row, 1, QTableWidgetItem(str(value)))
+
+                            # Check if the field is "Photo" or "photo"
+                            if field_name.lower() == "photo" and value:
+                                button = QPushButton("View Photo")
+                                button.setFixedSize(120, 25)  # Set the button size
+                                button.clicked.connect(lambda _, v=value: self.show_photo_dialog(v))
+                                
+                                # Create a widget for padding inside the cell
+                                button_container = QWidget()
+                                button_layout = QHBoxLayout(button_container)
+                                button_layout.setContentsMargins(5, 0, 0, 0)  # Add horizontal padding
+                                button_layout.addWidget(button)
+                                button_layout.setAlignment(Qt.AlignLeft)  # Align to the left
+
+                                table.setCellWidget(row, 1, button_container)
+
+                                # Adjust row height to fit button size
+                                table.setRowHeight(row, 35)  # Adjust the height to fit button
+                            else:
+                                table.setItem(row, 1, QTableWidgetItem(str(value)))
                     else:
                         table.setColumnCount(1)
                         table.setRowCount(1)
@@ -202,13 +251,24 @@ class ReconstructFeatures:
                         table.setItem(0, 0, QTableWidgetItem(str(broken_feature)))
 
                     group_layout.addWidget(table)
-
-                    # Create "Accept" button
                     accept_button = QPushButton("Accept")
                     accept_button.clicked.connect(lambda checked, bf=broken_feature: self.accept_and_next_feature(bf))
                     group_layout.addWidget(accept_button)
 
                     layout.addWidget(group_box)
+
+                    # Add the table to the tables list for synchronization
+                    tables.append(table)
+
+                # Synchronize the scrolls
+                def sync_scrolls(value):
+                    for table in tables:
+                        table.verticalScrollBar().setValue(value)
+
+                # Connect each table's vertical scroll bar to synchronize all others
+                for table in tables:
+                    table.verticalScrollBar().valueChanged.connect(lambda value, table=table: sync_scrolls(value))
+
             else:
                 layout.addWidget(QLabel("No broken features available."))
         else:
@@ -221,6 +281,31 @@ class ReconstructFeatures:
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         return scroll_area
+
+    def show_photo_dialog(self, base64_string):
+        """Decode the base64 image and display it in a popup dialog."""
+        try:
+            # Decode the base64 string
+            image_data = base64.b64decode(base64_string)
+            
+            # Convert to QPixmap
+            pixmap = QPixmap()
+            pixmap.loadFromData(image_data)
+
+            # Create dialog
+            dialog = QDialog()
+            dialog.setWindowTitle("Photo Preview")
+            dialog.setMinimumSize(400, 400)
+
+            layout = QVBoxLayout(dialog)
+            label = QLabel()
+            label.setPixmap(pixmap)
+            label.setScaledContents(True)
+
+            layout.addWidget(label)
+            dialog.exec_()
+        except Exception as e:
+            QMessageBox.critical(None, "Error", f"Failed to load image: {str(e)}")
     
 
     def accept_and_next_feature(self, accepted_feature):
@@ -366,7 +451,9 @@ class ReconstructFeatures:
         self.set_colour_opacity(self.selected_layer_for_processing, 0.6)
         canvas.setLayers([layer, self.reprojected_raster_layer])
         canvas.setCanvasColor(QColor("white"))  # Set the canvas background color to white
-        canvas.setMapTool(QgsMapToolPan(canvas))  # Enable panning on the canvas
+
+        canvas.refresh()  # Refresh the canvas to ensure proper visualization
+        
         frame_layout.addWidget(canvas)  # Add the canvas to the frame layout
 
         return frame  # Return the completed frame
@@ -395,6 +482,18 @@ class ReconstructFeatures:
             self.left_canvas.setExtent(self.right_canvas.extent())  # Set the extent of the left canvas to match the right canvas
             self.left_canvas.refresh()  # Refresh the left canvas to update its display
             self.is_synchronizing = False  # Reset the synchronization flag
+
+    def setup_panning(self):
+        """Enable panning on both canvases."""
+        try:
+            if self.left_canvas and self.right_canvas:
+                self.left_pan_tool = QgsMapToolPan(self.left_canvas)
+                self.right_pan_tool = QgsMapToolPan(self.right_canvas)
+
+                self.left_canvas.setMapTool(self.left_pan_tool)
+                self.right_canvas.setMapTool(self.right_pan_tool)
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Error in setup_panning: {str(e)}", 'AMRUT', Qgis.Critical)
 
     def update_canvases(self):
         """

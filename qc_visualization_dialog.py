@@ -1,8 +1,8 @@
 from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel
 from PyQt5.QtCore import Qt, QTimer
 from qgis.core import QgsProject, QgsVectorLayer, QgsCoordinateTransform, QgsRasterLayer, QgsProcessingFeedback, QgsProcessingContext, QgsMessageLog, Qgis, QgsPointXY
-from qgis.gui import QgsMapCanvas
-from PyQt5.QtGui import QColor, QMouseEvent
+from qgis.gui import QgsMapCanvas, QgsMapToolPan
+from PyQt5.QtGui import QColor
 from . import verification_dialog
 
 import zipfile
@@ -24,8 +24,8 @@ class QualityCheckVisualizationDialog(QDialog):
         self.setWindowState(Qt.WindowMaximized)
 
         # Attributes for map canvases
-        self.left_map_canvas = None
-        self.right_map_canvas = None
+        self.left_canvas = None
+        self.right_canvas = None
         self.synchronizing = False  # Prevent infinite synchronization loops
 
         # Main layout
@@ -35,20 +35,23 @@ class QualityCheckVisualizationDialog(QDialog):
         raster_layer = self.get_layer_by_name(self.selected_raster_layer_name) if self.selected_raster_layer_name else None
 
         if layer:
-            left_panel, self.left_map_canvas = self.create_layer_visualization_panel(layer, f"{self.selected_layer_name} (Original Data)", raster_layer)
+            left_panel, self.left_canvas = self.create_layer_visualization_panel(layer, f"{self.selected_layer_name} (Original Data)", raster_layer)
         else:
-            left_panel, self.left_map_canvas = self.create_error_panel(f"Layer '{self.selected_layer_name}' not found in the project."), None
+            left_panel, self.left_canvas = self.create_error_panel(f"Layer '{self.selected_layer_name}' not found in the project."), None
         layout.addLayout(left_panel)
 
         # Add a vertical divider
         self.add_vertical_divider(layout)
 
         # Add right panel
-        right_panel, self.right_map_canvas = self.create_geojson_visualization_panel(raster_layer)
+        right_panel, self.right_canvas = self.create_geojson_visualization_panel(raster_layer)
         layout.addLayout(right_panel)
 
-        # Synchronize extents between left and right map canvases
-        self.setup_canvas_synchronization()
+        # Synchronize the views of both canvases
+        self.is_synchronizing = False  # Flag to avoid recursive synchronization
+        self.left_canvas.extentsChanged.connect(self.synchronize_right_canvas)
+        self.right_canvas.extentsChanged.connect(self.synchronize_left_canvas)
+        self.setup_panning()
 
         QTimer.singleShot(1000, lambda: self.show_new_feature_dialog(layer))
 
@@ -64,49 +67,33 @@ class QualityCheckVisualizationDialog(QDialog):
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in show_new_feature_dialog: {str(e)}", 'AMRUT', Qgis.Critical)
 
-    def setup_canvas_synchronization(self):
-        """Synchronize extents between the left and right map canvases."""
-        try:
-            if self.left_map_canvas and self.right_map_canvas:
-                self.left_map_canvas.extentsChanged.connect(self.sync_extents_to_right)
-                self.right_map_canvas.extentsChanged.connect(self.sync_extents_to_left)
-        except Exception as e:
-            QgsMessageLog.logMessage(f"Error in setup_canvas_synchronization: {str(e)}", 'AMRUT', Qgis.Critical)
+    def synchronize_right_canvas(self):
+        """Synchronize the right canvas with the left canvas."""
+        if not self.is_synchronizing:  # Prevent infinite loop 
+            self.is_synchronizing = True  # Mark synchronization in progress
+            self.right_canvas.setExtent(self.left_canvas.extent())  # Set the extent of the right canvas to match the left canvas
+            self.right_canvas.refresh()  # Refresh the right canvas to update its display
+            self.is_synchronizing = False  # Reset the synchronization flag
 
-    def sync_extents_to_right(self):
-        """Sync the extent of the left canvas to the right canvas."""
-        try:
-            if not self.synchronizing:  # Prevent infinite loops
-                self.synchronizing = True
-                if self.left_map_canvas and self.right_map_canvas:
-                    self.right_map_canvas.setExtent(self.left_map_canvas.extent())
-                    self.right_map_canvas.refresh()
-                    self.refresh_canvas_layers(self.right_map_canvas)  # Refresh layers for the new extent
-                self.synchronizing = False
-        except Exception as e:
-            QgsMessageLog.logMessage(f"Error in sync_extents_to_right: {str(e)}", 'AMRUT', Qgis.Critical)
+    def synchronize_left_canvas(self):
+        """Synchronize the left canvas with the right canvas."""
+        if not self.is_synchronizing:  # Prevent infinite loop
+            self.is_synchronizing = True  # Mark synchronization in progress
+            self.left_canvas.setExtent(self.right_canvas.extent())  # Set the extent of the left canvas to match the right canvas
+            self.left_canvas.refresh()  # Refresh the left canvas to update its display
+            self.is_synchronizing = False  # Reset the synchronization flag
 
-    def sync_extents_to_left(self):
-        """Sync the extent of the right canvas to the left canvas."""
+    def setup_panning(self):
+        """Enable panning on both canvases."""
         try:
-            if not self.synchronizing:  # Prevent infinite loops
-                self.synchronizing = True
-                if self.left_map_canvas and self.right_map_canvas:
-                    self.left_map_canvas.setExtent(self.right_map_canvas.extent())
-                    self.left_map_canvas.refresh()
-                    self.refresh_canvas_layers(self.left_map_canvas)  # Refresh layers for the new extent
-                self.synchronizing = False
-        except Exception as e:
-            QgsMessageLog.logMessage(f"Error in sync_extents_to_left: {str(e)}", 'AMRUT', Qgis.Critical)
+            if self.left_canvas and self.right_canvas:
+                self.left_pan_tool = QgsMapToolPan(self.left_canvas)
+                self.right_pan_tool = QgsMapToolPan(self.right_canvas)
 
-    def refresh_canvas_layers(self, canvas):
-        """Refresh all layers in the given canvas to load data for the current extent."""
-        try:
-            if canvas:
-                for layer in canvas.layers():
-                    layer.triggerRepaint()  # Reload and repaint the layer for the current extent
+                self.left_canvas.setMapTool(self.left_pan_tool)
+                self.right_canvas.setMapTool(self.right_pan_tool)
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error in refresh_canvas_layers: {str(e)}", 'AMRUT', Qgis.Critical)
+            QgsMessageLog.logMessage(f"Error in setup_panning: {str(e)}", 'AMRUT', Qgis.Critical)
 
     def create_geojson_visualization_panel(self, raster_layer):
         """Create a panel to visualize the GeoJSON extracted from the AMRUT file."""
@@ -314,59 +301,12 @@ class QualityCheckVisualizationDialog(QDialog):
             canvas.setExtent(self.grid_extent)
             canvas.setCanvasColor(QColor("white"))
 
-            # Enable mouse tracking for panning
-            canvas.setMouseTracking(True)
-            self.setup_mouse_tracking(canvas)
-
             canvas.refresh()  # Refresh the canvas to ensure proper visualization
 
             return canvas
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in create_map_canvas: {str(e)}", 'AMRUT', Qgis.Critical)
             return None
-        
-    def setup_mouse_tracking(self, canvas):
-        """Set up mouse tracking for panning."""
-        self.canvas = canvas
-        self.last_mouse_position = None
-
-        # Connect mouse events
-        self.canvas.mousePressEvent = self.mouse_press_event
-        self.canvas.mouseMoveEvent = self.mouse_move_event
-        self.canvas.mouseReleaseEvent = self.mouse_release_event
-
-    def mouse_press_event(self, event: QMouseEvent):
-        """Handle mouse press event for panning."""
-        if event.button() == Qt.LeftButton:
-            self.last_mouse_position = event.pos()
-
-    def mouse_move_event(self, event: QMouseEvent):
-        """Handle mouse move event for panning."""
-        if self.last_mouse_position is not None:
-            # Calculate delta in screen coordinates
-            current_mouse_position = event.pos()
-
-            # Convert mouse positions to map coordinates
-            start_map_point = self.canvas.getCoordinateTransform().toMapCoordinates(self.last_mouse_position)
-            end_map_point = self.canvas.getCoordinateTransform().toMapCoordinates(current_mouse_position)
-
-            # Calculate map delta
-            map_delta_x = start_map_point.x() - end_map_point.x()
-            map_delta_y = start_map_point.y() - end_map_point.y()
-
-            # Update the canvas center
-            current_center = self.canvas.center()
-            new_center = QgsPointXY(current_center.x() + map_delta_x, current_center.y() + map_delta_y)
-
-            self.canvas.setCenter(new_center)
-
-            # Update last mouse position
-            self.last_mouse_position = current_mouse_position
-
-    def mouse_release_event(self, event: QMouseEvent):
-        """Handle mouse release event."""
-        if event.button() == Qt.LeftButton:
-            self.last_mouse_position = None
 
     def create_error_panel(self, message):
         """Create a panel to display an error message."""
