@@ -284,6 +284,7 @@ class ReconstructFeatures:
 
     def show_photo_dialog(self, base64_string):
         """Decode the base64 image and display it in a popup dialog."""
+        """Decode the base64 image and display it in a dynamically sized popup dialog."""
         try:
             # Decode the base64 string
             image_data = base64.b64decode(base64_string)
@@ -291,21 +292,57 @@ class ReconstructFeatures:
             # Convert to QPixmap
             pixmap = QPixmap()
             pixmap.loadFromData(image_data)
+            if not pixmap.loadFromData(image_data):
+                raise ValueError("Failed to load image data")
+
+            # Get original image size
+            img_width = pixmap.width()
+            img_height = pixmap.height()
+
+            # Define max and preferred sizes
+            max_width = 800
+            max_height = 600
+            min_width = 500  # Ensure it's not too small
+            min_height = 400
+
+            # Compute new size while preserving aspect ratio
+            aspect_ratio = img_width / img_height
+
+            if img_width > max_width or img_height > max_height:
+                # Scale down while preserving aspect ratio
+                if aspect_ratio > 1:
+                    scaled_width = max_width
+                    scaled_height = int(max_width / aspect_ratio)
+                else:
+                    scaled_height = max_height
+                    scaled_width = int(max_height * aspect_ratio)
+            else:
+                # Scale up smaller images while maintaining minimums
+                scaled_width = max(min_width, img_width)
+                scaled_height = max(min_height, img_height)
+
+            # Resize pixmap to ensure it appears larger
+            pixmap = pixmap.scaled(scaled_width, scaled_height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
             # Create dialog
             dialog = QDialog()
             dialog.setWindowTitle("Photo Preview")
             dialog.setMinimumSize(400, 400)
+            dialog.resize(scaled_width, scaled_height)  # Set dynamic size
 
+            # Create layout and label
             layout = QVBoxLayout(dialog)
             label = QLabel()
             label.setPixmap(pixmap)
             label.setScaledContents(True)
+            label.setAlignment(Qt.AlignCenter)
 
             layout.addWidget(label)
             dialog.exec_()
+            
         except Exception as e:
             QMessageBox.critical(None, "Error", f"Failed to load image: {str(e)}")
+
     
 
     def accept_and_next_feature(self, accepted_feature):
