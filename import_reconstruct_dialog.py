@@ -159,6 +159,7 @@ class ReconstructLayerTabDialog(QDialog):
             return None
 
     def compare_changes_result(self, result, data):
+        self.progress_lable.setText("Comparing Changes...")
         self.progress_bar.setRange(0, 100)
         if result:
             if len(data) == 0:
@@ -254,7 +255,6 @@ class ReconstructLayerTabDialog(QDialog):
 
     def compare_changes(self):
         self.progress_bar.setVisible(True)
-        self.progress_lable.setText("Comparing Changes...")
         self.compare_changes_worker = workers.CompareChangesWorker(self.selected_layer_for_processing)
         self.compare_changes_thread = QThread()
         self.compare_changes_worker.moveToThread(self.compare_changes_thread)
