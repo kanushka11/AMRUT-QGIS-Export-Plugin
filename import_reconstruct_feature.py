@@ -283,7 +283,6 @@ class ReconstructFeatures:
         return scroll_area
 
     def show_photo_dialog(self, base64_string):
-        """Decode the base64 image and display it in a popup dialog."""
         """Decode the base64 image and display it in a dynamically sized popup dialog."""
         try:
             # Decode the base64 string
@@ -291,7 +290,6 @@ class ReconstructFeatures:
             
             # Convert to QPixmap
             pixmap = QPixmap()
-            pixmap.loadFromData(image_data)
             if not pixmap.loadFromData(image_data):
                 raise ValueError("Failed to load image data")
 
@@ -300,10 +298,10 @@ class ReconstructFeatures:
             img_height = pixmap.height()
 
             # Define max and preferred sizes
-            max_width = 800
-            max_height = 600
-            min_width = 500  # Ensure it's not too small
-            min_height = 400
+            max_width = 9000
+            max_height = 700
+            min_width = 600  # Ensure it's not too small
+            min_height = 500
 
             # Compute new size while preserving aspect ratio
             aspect_ratio = img_width / img_height
@@ -327,14 +325,12 @@ class ReconstructFeatures:
             # Create dialog
             dialog = QDialog()
             dialog.setWindowTitle("Photo Preview")
-            dialog.setMinimumSize(400, 400)
             dialog.resize(scaled_width, scaled_height)  # Set dynamic size
 
             # Create layout and label
             layout = QVBoxLayout(dialog)
             label = QLabel()
             label.setPixmap(pixmap)
-            label.setScaledContents(True)
             label.setAlignment(Qt.AlignCenter)
 
             layout.addWidget(label)
@@ -342,7 +338,6 @@ class ReconstructFeatures:
             
         except Exception as e:
             QMessageBox.critical(None, "Error", f"Failed to load image: {str(e)}")
-
     
 
     def accept_and_next_feature(self, accepted_feature):
