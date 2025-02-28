@@ -320,7 +320,6 @@ class ImportDialog(QDialog):
             qualityCheckVisualizationDialog.exec_()
 
             self.validate_amrut_file(self.selected_file)
-            self.raster_layer_dropdown.setCurrentIndex(0)
 
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in proceed_quality_check: {str(e)}", 'AMRUT', Qgis.Critical)
