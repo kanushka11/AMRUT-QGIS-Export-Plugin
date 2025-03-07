@@ -1,4 +1,3 @@
-
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QDialog,
@@ -16,15 +15,15 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QRadioButton,
     QSpinBox,
-    QTabBar
-
+    QTabBar,
+    QCheckBox
 )
 from qgis.core import (
     QgsProject,
     QgsProcessingFeedback,
     QgsMessageLog,
     Qgis,
-    QgsVectorLayer,
+    QgsMapLayer,
     QgsApplication
 )
 from PyQt5.QtCore import QRunnable, QThreadPool, pyqtSignal, QObject, QThread
@@ -75,6 +74,7 @@ class ClipMergeExportTabDialog(QDialog):
         self.progress_lable = QLabel()
         layout.addWidget(self.progress_lable)
         layout.addWidget(self.progress_bar)
+        self.progress_bar.setVisible(False)
 
         # Navigation buttons
         self.navigation_layout = QHBoxLayout()
@@ -102,34 +102,79 @@ class ClipMergeExportTabDialog(QDialog):
 
 
     def create_layer_selection_tab(self):
-        """Creates the Layer Selection tab."""
+        """Creates the Layer Selection tab with separate Vector and Raster layer selection."""
         tab = QWidget()
         layout = QVBoxLayout(tab)
 
-        # Add layer selection combo box
-        self.layer_list_widget = QListWidget()
-        all_layers = [layer for layer in QgsProject.instance().mapLayers().values() if layer.isValid()]
+        # Vector Layers
+        layout.addWidget(QLabel("Select Vector Layers:"))
+        self.select_all_vector_checkbox = QCheckBox("Select All Vector Layers")
+        self.select_all_vector_checkbox.stateChanged.connect(self.select_all_vector_layers)
+        layout.addWidget(self.select_all_vector_checkbox)
+
+        self.vector_layer_list_widget = QListWidget()
+        self.vector_layer_list_widget.setSelectionMode(QListWidget.MultiSelection)
+        layout.addWidget(self.vector_layer_list_widget)
+
+        # Raster Layers
+        layout.addWidget(QLabel("Select Raster Layers:"))
+        self.raster_layer_list_widget = QListWidget()
+        self.raster_layer_list_widget.setSelectionMode(QListWidget.MultiSelection)
+        layout.addWidget(self.raster_layer_list_widget)
+
+        # Populate layers
+        all_layers = QgsProject.instance().mapLayers().values()
         for layer in all_layers:
             item = QListWidgetItem(layer.name())
             item.setCheckState(Qt.Unchecked)
-            self.layer_list_widget.addItem(item)
+            if layer.type() == QgsMapLayer.VectorLayer:
+                self.vector_layer_list_widget.addItem(item)
+            elif layer.type() == QgsMapLayer.RasterLayer:
+                self.raster_layer_list_widget.addItem(item)
 
-        global  selectedLayers
+        global selectedLayers
         selectedLayers = []
-        self.layer_list_widget.itemChanged.connect(self.update_selected_layers)
-
-        layout.addWidget(QLabel("Select Layers:"))
-        layout.addWidget(self.layer_list_widget)
-
+        self.vector_layer_list_widget.itemChanged.connect(self.update_selected_layers)
+        self.raster_layer_list_widget.itemChanged.connect(self.update_raster_selection)
 
         return tab
+
+    def select_all_vector_layers(self, state):
+        """Checks or unchecks all vector layers based on the select all checkbox."""
+        check_state = Qt.Checked if state == Qt.Checked else Qt.Unchecked
+        for i in range(self.vector_layer_list_widget.count()):
+            self.vector_layer_list_widget.item(i).setCheckState(check_state)
+
+    def update_selected_layers(self, item):
+        """Updates the list of selected layers based on the item check state."""
+        global selectedLayers
+        layer_name = item.text()
+        all_layers = QgsProject.instance().mapLayers().values()
+
+        if item.checkState() == Qt.Checked:
+            for layer in all_layers:
+                if layer.name() == layer_name and layer not in selectedLayers:
+                    selectedLayers.append(layer)
+                    break
+        else:
+            selectedLayers = [layer for layer in selectedLayers if layer.name() != layer_name]
+
+    def update_raster_selection(self, item):
+        """Ensures only one raster layer can be selected at a time."""
+        if item.checkState() == Qt.Checked:
+            for i in range(self.raster_layer_list_widget.count()):
+                current_item = self.raster_layer_list_widget.item(i)
+                if current_item != item and current_item.checkState() == Qt.Checked:
+                    current_item.setCheckState(Qt.Unchecked)
+        
+        # Update the selected layers list accordingly
+        self.update_selected_layers(item)
 
     def create_grid_creation_tab(self):
         """Creates the Grid Creation tab."""
         tab = QWidget()
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(25)
 
         self.question = "Do you already have grid / segmentation Layer to clip ?"
         self.questionLable = QLabel(self.question)
@@ -186,13 +231,13 @@ class ClipMergeExportTabDialog(QDialog):
         def on_radio_button_toggled():
             if self.yes_radio.isChecked():
                 self.layer_dropdown.setVisible(True)
-                self.dropdown_lable.setText("Selelet Grid / Segmentation Layer : ")
+                self.dropdown_lable.setText("Select Grid / Segmentation Layer : ")
                 self.dropdown_lable.setVisible(True)
                 self.number_input.setVisible(False)
                 number_label.setVisible(False)
             elif self.no_radio.isChecked():
                 self.layer_dropdown.setVisible(True)
-                self.dropdown_lable.setText("Selelet Area Boundary Layer : ")
+                self.dropdown_lable.setText("Select Area Boundary Layer : ")
                 self.dropdown_lable.setVisible(True)
                 self.number_input.setVisible(True)
                 number_label.setVisible(True)
@@ -233,9 +278,14 @@ class ClipMergeExportTabDialog(QDialog):
 
         try:
             if hasattr(self, "output_dir"):
+                    self.progress_bar.setVisible(True)
                     global gridLayer
                     self.progress_lable.setText("Clipping...Please Wait")
+                    self.progress_bar.setValue(0)
                     self.progress_bar.setMaximum(gridLayer.featureCount() -2)
+                     # Disable navigation buttons
+                    self.next_button.setEnabled(False)
+                    self.back_button.setEnabled(False)
                     self.thread = QThread()
                     self.clipWorker = workers.ClippingWorker(gridLayer, selectedLayers, self.output_dir)
                     self.clipWorker.moveToThread(self.thread)
@@ -252,26 +302,16 @@ class ClipMergeExportTabDialog(QDialog):
 
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
-    
-    def update_selected_layers(self, item):
-        """Updates the list of selected layers based on the item check state."""
-        global selectedLayers
-        layer_name = item.text()
-        all_layers = QgsProject.instance().mapLayers().values()
+            self.progress_bar.setVisible(False)
+            self.progress_lable.setText("")
+            self.next_button.setEnabled(True)  # Re-enable Run button in case of error
+            self.back_button.setEnabled(True)
 
-        if item.checkState() == Qt.Checked:
-            # Add the layer to selectedLayers
-            for layer in all_layers:
-                if layer.name() == layer_name and layer not in selectedLayers:
-                    selectedLayers.append(layer)
-                    break
-        else:
-            # Remove the layer from selectedLayers
-            selectedLayers = [layer for layer in selectedLayers if layer.name() != layer_name]
 
-    
     def navigate_back(self):
         """Navigate to the previous tab."""
+        self.progress_bar.setVisible(False)
+        self.progress_lable.setText("")
         current_index = self.tabs.currentIndex()
         if current_index > 0:
             self.tabs.setCurrentIndex(current_index - 1)
@@ -284,12 +324,11 @@ class ClipMergeExportTabDialog(QDialog):
         global gridLayer
         current_index = self.tabs.currentIndex()
         if current_index == clipping_tab_index:
+            self.progress_bar.setTextVisible(True)
             # Final tab: Run process
             self.next_button.setEnabled(False)
             self.back_button.setEnabled(False)
             self.run_process()
-            self.next_button.setEnabled(True)
-            self.back_button.setEnabled(True)
         else:
             # Move to the next tab
             if(current_index == layer_selection_tab_index) :
@@ -360,6 +399,7 @@ class ClipMergeExportTabDialog(QDialog):
         self.next_button.setEnabled(True)
         self.progress_bar.setRange(0, 100)  # Reset progress bar range
         self.progress_lable.setText("")
+        self.progress_bar.setVisible(False)
         QMessageBox.critical(self,"Error", str(error))
         QgsMessageLog.logMessage(str(error), 'AMRUT_Export', Qgis.Critical)
     
@@ -424,9 +464,11 @@ class ClipMergeExportTabDialog(QDialog):
                 return layer
         return None  
     
-    def handle_clip_success(self, success) :
-        if success :
-             QMessageBox.information(self, "Clipping", "Clipping completed")
+    def handle_clip_success(self, success):
+        if success:
+            self.progress_lable.setText("Clipping completed")
+            QMessageBox.information(self, "Clipping", "Clipping completed")
+            self.close()  # Close the main dialog
     
     def update_clipping_progress (self, progress) :
         self.progress_bar.setValue(progress)

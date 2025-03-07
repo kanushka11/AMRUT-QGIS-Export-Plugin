@@ -1,17 +1,4 @@
-from qgis.core import (
-    QgsVectorFileWriter,
-    QgsVectorLayer,
-    QgsProject,
-    QgsFeature,
-    QgsGeometry,
-    QgsFields,
-    QgsField,
-    QgsWkbTypes,
-    QgsCoordinateReferenceSystem
-)
-from PyQt5.QtCore import QVariant
-import os
-
+from qgis.core import QgsProject
 
 def process_temp_layer(layer_name):
     original_layer = QgsProject.instance().mapLayersByName(layer_name)[0]

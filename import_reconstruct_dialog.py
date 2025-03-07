@@ -19,7 +19,7 @@ from qgis.core import (
     QgsMessageLog,
     Qgis,
     QgsVectorLayer,
-    QgsProcessingFeatureSourceDefinition,
+    QgsRenderContext
 )
 from PyQt5.QtCore import QThread, Qt
 from PyQt5.QtGui import QPixmap
@@ -29,9 +29,7 @@ from . import import_process_layer as process
 from . import import_reconstruct_feature
 
 from qgis.core import QgsProject, QgsMapLayer
-import os
 import sip
-import processing
 
 data_selection_tab_index = 0
 layer_reconstruction_tab_index = 1
@@ -116,6 +114,8 @@ class ReconstructLayerTabDialog(QDialog):
             if layer.subsetString():  # Check if a filter is applied
                 layer.setSubsetString("")  # Clear the filter
 
+        QgsProject.instance().write()
+
         event.accept()  # Allow the dialog to close
 
     """R E S U L T S    H A N D L I N G"""
@@ -161,6 +161,7 @@ class ReconstructLayerTabDialog(QDialog):
             return None
 
     def compare_changes_result(self, result, data):
+        self.progress_lable.setText("Comparing Changes...")
         self.progress_bar.setRange(0, 100)
         if result:
             if len(data) == 0:
@@ -256,7 +257,6 @@ class ReconstructLayerTabDialog(QDialog):
 
     def compare_changes(self):
         self.progress_bar.setVisible(True)
-        self.progress_lable.setText("Comparing Changes...")
         self.compare_changes_worker = workers.CompareChangesWorker(self.selected_layer_for_processing)
         self.compare_changes_thread = QThread()
         self.compare_changes_worker.moveToThread(self.compare_changes_thread)
@@ -475,4 +475,5 @@ class ReconstructLayerTabDialog(QDialog):
 
         def get_layout(self):
             return self.layout
+        
 

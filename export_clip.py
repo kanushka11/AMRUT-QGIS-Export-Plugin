@@ -38,9 +38,16 @@ def clip_layers_to_grid(grid_layer, layers, output_base_dir, progress_signal):
     """Clip all layers by grid cells -> clip, merge and archive."""
     feedback = QgsProcessingFeedback()
 
-    # Create the output directory if it doesn't exist
-    if not os.path.exists(output_base_dir):
-        os.makedirs(output_base_dir)
+    # Define the output directory inside the selected directory
+    output_base_dir = os.path.join(output_base_dir, "Grid Output")
+
+    # If the directory exists, remove it
+    if os.path.exists(output_base_dir):
+        shutil.rmtree(output_base_dir)
+
+    # Create a new "Grid Output" directory
+    os.makedirs(output_base_dir)
+
     csv_file_path = os.path.join(output_base_dir, "grid_data.csv")
 
     with open(csv_file_path, mode='w', newline='', encoding='utf-8') as csv_file:
