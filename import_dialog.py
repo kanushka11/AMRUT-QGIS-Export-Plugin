@@ -182,10 +182,6 @@ class ImportDialog(QDialog):
             self.layer_dropdown.model().item(0).setEnabled(False)
 
             temp_dir = tempfile.mkdtemp()
-            backup_path = file_path + ".bak"
-
-            # Create a backup before modifying
-            shutil.copy(file_path, backup_path)
 
             with zipfile.ZipFile(file_path, 'r') as zip_ref:
                 if 'metadata.json' not in zip_ref.namelist():
@@ -252,10 +248,6 @@ class ImportDialog(QDialog):
             # Replace the original .amrut file with the updated one
             os.replace(temp_amrut_path, file_path)
 
-            # Delete the backup file after successful replacement
-            if os.path.exists(backup_path):
-                os.remove(backup_path)
-
             # Extract bounds from metadata
             self.metadata_bounds = {key: metadata[key] for key in ["north", "south", "east", "west"] if key in metadata}
 
@@ -263,8 +255,9 @@ class ImportDialog(QDialog):
             if layers_qc_pending:
                 self.layer_dropdown.addItems(layers_qc_pending)
             else:
-                QMessageBox.information(self, "All Layers Verified", "No layers are pending QC.")
-
+                QMessageBox.information(self, "All Layers Verified", "All layers of this file have been verified.")
+                self.file_input.clear()
+                
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in validate_amrut_file: {str(e)}", 'AMRUT', Qgis.Critical)
             QMessageBox.critical(self, "Error", f"An unexpected error occurred: {str(e)}")
@@ -272,6 +265,7 @@ class ImportDialog(QDialog):
         finally:
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir)
+
 
     def proceed_quality_check(self):
         """Proceed with the quality check process for the selected layer"""
