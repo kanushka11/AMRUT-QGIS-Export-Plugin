@@ -33,13 +33,13 @@ class ImportDialog(QDialog):
         # Add buttons for "Reconstruct Layer" and "Quality Check"
         self.add_centered_button(
             layout, 
-            "Reconstruct Layer", 
-            lambda: self._open_dialog(dialog, self.reconstruct_dialog)
+            "Quality Check", 
+            lambda: self._open_dialog(dialog, self.quality_check_dialog)
         )
         self.add_centered_button(
             layout, 
-            "Quality Check", 
-            lambda: self._open_dialog(dialog, self.quality_check_dialog)
+            "Reconstruct Layer", 
+            lambda: self._open_dialog(dialog, self.reconstruct_dialog)
         )
         footer_note = ui.get_footer_note()
         layout.addWidget(footer_note, alignment=Qt.AlignCenter)
@@ -147,8 +147,7 @@ class ImportDialog(QDialog):
         dropdown_layout.addWidget(label)
 
         dropdown.addItem(placeholder)
-        dropdown.model().item(0).setEnabled(False)  # Disable the placeholder item
-
+        
         if populate:
             dropdown.addItems([])  # Populate dropdown if needed
 
