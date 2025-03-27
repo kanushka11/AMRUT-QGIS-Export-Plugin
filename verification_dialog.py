@@ -9,6 +9,7 @@ import os
 import tempfile
 import shutil
 import json
+import random
 
 class VerificationDialog:
     def __init__(self, selected_layer_name, selected_raster_layer_name, amrut_file_path, grid_extent):
@@ -177,7 +178,7 @@ class VerificationDialog:
         self.right_canvas.extentsChanged.connect(self.synchronize_left_canvas)
         self.setup_panning()
 
-        accept_button.clicked.connect(lambda: self.move_to_next_feature(feature_ids))
+        accept_button.clicked.connect(lambda: self.accept_feature(feature_ids))
         reject_button.clicked.connect(lambda: self.reject_feature(feature_ids))
 
         # Update the canvases to focus on the first feature
@@ -276,11 +277,31 @@ class VerificationDialog:
         canvas.setExtent(extent)
         canvas.refresh()
 
+    def accept_feature(self, feature_ids):
+        feature_id = int(list(feature_ids)[self.current_feature_index])  # Get the current feature ID
+        features = [f for f in self.temporary_layer.getFeatures(f"feature_id = {feature_id}")]  # Fetch all matching features
+
+        if len(features) > 1:
+            self.temporary_layer.startEditing()  # Start editing the layer
+            
+            # Keep the first feature's ID unchanged
+            first_feature = features[0]
+            remaining_features = features[1:]  # Other features
+
+            for feature in remaining_features:
+                new_feature_id = random.randint(100001, 999999999)  # Increased limit for feature ID
+                feature.setAttribute("feature_id", new_feature_id)  # Update the feature ID
+                self.temporary_layer.updateFeature(feature)  # Apply the change
+            
+            self.temporary_layer.commitChanges()  # Save changes
+
+        self.move_to_next_feature(feature_ids)  # Move to the next feature
+
     def reject_feature(self, feature_ids):
         """
         Handle rejecting the current feature.
         Deletes the feature from the temporary layer(layer from .amrut file) and moves to the next feature.
-        """
+      l  """
         feature_id = int(list(feature_ids)[self.current_feature_index])  # Get the current feature ID
         features = [f for f in self.temporary_layer.getFeatures(f"feature_id = {feature_id}")]  # Fetch all matching features
         if features:
