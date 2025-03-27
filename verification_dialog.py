@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame, QMessageBox
 from PyQt5.QtCore import Qt
-from qgis.core import QgsProject, QgsRectangle, QgsMessageLog, Qgis, QgsWkbTypes, QgsVectorFileWriter, QgsFeature, QgsCoordinateTransformContext
+from qgis.core import QgsProject, QgsRectangle, QgsGeometry, QgsMessageLog, Qgis, QgsWkbTypes, QgsVectorFileWriter, QgsFeature, QgsCoordinateTransformContext
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
 from PyQt5.QtGui import QColor
 from math import cos, radians
@@ -232,44 +232,49 @@ class VerificationDialog:
 
         return frame  # Return the completed frame
 
-    def update_canvases(self,feature_ids):
+    def update_canvases(self, feature_ids):
         """
-        Update canvases to focus on the current feature.
-        Zooms both canvases to the bounding box of the feature being verified.
+        Update canvases to focus on all features with the same feature_id.
+        Zooms both canvases to the bounding box of all features being verified.
         """
         if self.current_feature_index < len(feature_ids):  # Check if there are remaining features
             feature_id = int(list(feature_ids)[self.current_feature_index])  # Get the current feature ID
-            feature = next(self.temporary_layer.getFeatures(f"feature_id = {feature_id}"), None)  # Fetch the feature
+            features = [f for f in self.temporary_layer.getFeatures(f"feature_id = {feature_id}")]  # Fetch all features with the same feature_id
 
-            if feature:
-                centroid_geom = feature.geometry().centroid()  # Calculate the centroid of the feature
-                centroid_point = centroid_geom.asPoint()  # Get the centroid as a point
-                buffer = self.calculate_dynamic_buffer(feature.geometry())  # Calculate a dynamic buffer size
+            if features:
+                # Compute a bounding box that includes all matching features
+                bbox = None
+                for feature in features:
+                    if bbox is None:
+                        bbox = feature.geometry().boundingBox()
+                    else:
+                        bbox.combineExtentWith(feature.geometry().boundingBox())
 
-                # Define the bounding box for the feature with the buffer
+                # Apply a buffer for better visibility
+                buffer = self.calculate_dynamic_buffer(QgsGeometry.fromRect(bbox))
                 extent = QgsRectangle(
-                    centroid_point.x() - buffer,
-                    centroid_point.y() - buffer,
-                    centroid_point.x() + buffer,
-                    centroid_point.y() + buffer
+                    bbox.xMinimum() - buffer,
+                    bbox.yMinimum() - buffer,
+                    bbox.xMaximum() + buffer,
+                    bbox.yMaximum() + buffer
                 )
-                self.zoom_to_feature_on_canvas(extent, self.left_canvas,self.selected_layer,feature_id)  # Zoom the left canvas to the feature
-                self.zoom_to_feature_on_canvas(extent, self.right_canvas,self.temporary_layer,feature_id)  # Zoom the right canvas to the feature
+
+                # Zoom both canvases to the combined bounding box
+                self.zoom_to_feature_on_canvas(extent, self.left_canvas, self.selected_layer, feature_id)
+                self.zoom_to_feature_on_canvas(extent, self.right_canvas, self.temporary_layer, feature_id)
             else:
-                # Log a warning if the feature cannot be found
                 QgsMessageLog.logMessage(
-                    f"Feature with feature_id {feature_id} not found in the .amrut file.",
+                    f"No features found with feature_id {feature_id} in the .amrut file.",
                     "AMRUT",
                     Qgis.Warning
-                )            
+                )
 
-    def zoom_to_feature_on_canvas(self, extent, canvas,layer,feature_id):
-        """Zoom to the feature's bounding box on the canvas."""
+    def zoom_to_feature_on_canvas(self, extent, canvas, layer, feature_id):
+        """Zoom to the bounding box of all features with the same feature_id."""
         if layer:
-            # Apply a filter to show only the specific feature
-            layer.setSubsetString(f"feature_id = {feature_id}")
-        canvas.setExtent(extent)  # Set the extent of the canvas
-        canvas.refresh()  # Refresh the canvas to apply the changes
+            layer.setSubsetString(f"feature_id = {feature_id}")  # Filter layer to show all matching features
+        canvas.setExtent(extent)
+        canvas.refresh()
 
     def reject_feature(self, feature_ids):
         """
@@ -277,9 +282,12 @@ class VerificationDialog:
         Deletes the feature from the temporary layer(layer from .amrut file) and moves to the next feature.
         """
         feature_id = int(list(feature_ids)[self.current_feature_index])  # Get the current feature ID
-        feature = next(self.temporary_layer.getFeatures(f"feature_id = {feature_id}"), None)  # Fetch the feature
-        self.temporary_layer.startEditing()  # Start editing the temporary layer
-        self.temporary_layer.deleteFeature(feature.id())  # Delete the feature from the layer
+        features = [f for f in self.temporary_layer.getFeatures(f"feature_id = {feature_id}")]  # Fetch all matching features
+        if features:
+            self.temporary_layer.startEditing()  # Start editing the temporary layer
+            
+            for feature in features:
+                self.temporary_layer.deleteFeature(feature.id())  # Delete each feature
 
         if (self.new_features_checked):
             # Copy the feature from selected layer having the same feature_id to temporary layer
