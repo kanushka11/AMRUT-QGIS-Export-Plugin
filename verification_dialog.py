@@ -285,7 +285,6 @@ class VerificationDialog:
             self.temporary_layer.startEditing()  # Start editing the layer
             
             # Keep the first feature's ID unchanged
-            first_feature = features[0]
             remaining_features = features[1:]  # Other features
 
             for feature in remaining_features:
@@ -301,10 +300,11 @@ class VerificationDialog:
         """
         Handle rejecting the current feature.
         Deletes the feature from the temporary layer(layer from .amrut file) and moves to the next feature.
-      l  """
+        """
         feature_id = int(list(feature_ids)[self.current_feature_index])  # Get the current feature ID
         features = [f for f in self.temporary_layer.getFeatures(f"feature_id = {feature_id}")]  # Fetch all matching features
         if features:
+            selected_attributes = features[0].attributes()
             self.temporary_layer.startEditing()  # Start editing the temporary layer
             
             for feature in features:
@@ -315,7 +315,6 @@ class VerificationDialog:
             selected_feature = next(self.selected_layer.getFeatures(f"feature_id = {feature_id}"), None)
             if selected_feature:
                 # Get the attributes from the selected feature and create a new feature for the temporary layer
-                selected_attributes = selected_feature.attributes()
                 selected_geometry = selected_feature.geometry()
 
                 # Create a new feature with the selected attributes and geometry
