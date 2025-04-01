@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame, QMessageBox
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QVariant
 from qgis.core import QgsProject, QgsRectangle, QgsGeometry, QgsMessageLog, Qgis, QgsWkbTypes, QgsVectorFileWriter, QgsFeature, QgsCoordinateTransformContext
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
 from PyQt5.QtGui import QColor
@@ -21,6 +21,9 @@ class VerificationDialog:
         self.amrut_file_path = amrut_file_path
         self.grid_extent = grid_extent
         self.new_features_checked = False
+        self.is_feature_merged = False
+        self.removed_features = set()
+        self.merged_ids = []
 
     def check_for_new_features(self):
         """
@@ -43,6 +46,7 @@ class VerificationDialog:
         grid_inward_buffer = self.create_inward_buffer(self.grid_extent)
         if self.selected_layer and self.temporary_layer:
             changed_geometry_features = set()  # Set to store feature IDs with geometry changes
+            removed_features = set()  # Set to store feature IDs of removed features
 
             # Iterate over all features in the selected layer
             for selected_feature in self.selected_layer.getFeatures():
@@ -70,11 +74,13 @@ class VerificationDialog:
                                 grid_inward_buffer.yMaximum() >= feature_extent.yMaximum()):
                                 # Add the feature ID to the set if the condition is satisfied
                                 changed_geometry_features.add(feature_id)
+                else:
+                    removed_features.add(feature_id)
 
             # Store the changed geometry feature IDs for further processing
             self.changed_geometry_features = changed_geometry_features
+            self.removed_features = removed_features
             self.show_new_features_dialog(self.changed_geometry_features, "Geometry Changes")
-
 
     def show_new_features_dialog(self, feature_ids, title):
         """
@@ -243,32 +249,80 @@ class VerificationDialog:
             features = [f for f in self.temporary_layer.getFeatures(f"feature_id = {feature_id}")]  # Fetch all features with the same feature_id
 
             if features:
+                if self.new_features_checked and len(features) == 1:
+                    merged_feature = features[0]  # The new merged feature
+
+                    merged_ids = []
+
+                    # Get original feature IDs from removed_features that were merged
+                    for old_id in self.removed_features:
+                        old_feature = next(self.selected_layer.getFeatures(f"feature_id = {old_id}"), None)
+                        
+                        if old_feature:
+                            old_geom = old_feature.geometry()
+                            new_geom = merged_feature.geometry()
+
+                            # Step 1: Check if the old feature is fully within the new feature
+                            if new_geom.intersects(old_geom):
+                                # Step 2: Compute the difference and ensure the old feature is fully merged
+                                difference = old_geom.difference(new_geom)
+                                if difference.isEmpty():
+                                    merged_ids.append(old_id)
+
+                    if len(merged_ids) > 0 :
+                        self.merged_ids = merged_ids
+                        self.is_feature_merged = True
+
                 # Compute a bounding box that includes all matching features
                 bbox = None
                 for feature in features:
+                    geom = feature.geometry()
+                    
                     if bbox is None:
-                        bbox = feature.geometry().boundingBox()
+                        bbox = geom.boundingBox()
                     else:
-                        bbox.combineExtentWith(feature.geometry().boundingBox())
+                        bbox.combineExtentWith(geom.boundingBox())
 
-                # Apply a buffer for better visibility
-                buffer = self.calculate_dynamic_buffer(QgsGeometry.fromRect(bbox))
-                extent = QgsRectangle(
-                    bbox.xMinimum() - buffer,
-                    bbox.yMinimum() - buffer,
-                    bbox.xMaximum() + buffer,
-                    bbox.yMaximum() + buffer
-                )
+                # Ensure valid bounding box (for single points, use a small default box)
+                if bbox is None or (bbox.width() == 0 and bbox.height() == 0):
+                    print("Helloooooooo")
+                    centroid = features[0].geometry().centroid().asPoint()
+                    buffer = self.calculate_dynamic_buffer(features[0].geometry())
+                    extent = QgsRectangle(
+                        centroid.x() - buffer,
+                        centroid.y() - buffer,
+                        centroid.x() + buffer,
+                        centroid.y() + buffer
+                    )
+                else:
+                    # Apply a buffer for better visibility
+                    buffer = self.calculate_dynamic_buffer(QgsGeometry.fromRect(bbox))
+                    extent = QgsRectangle(
+                        bbox.xMinimum() - buffer,
+                        bbox.yMinimum() - buffer,
+                        bbox.xMaximum() + buffer,
+                        bbox.yMaximum() + buffer
+                    )
 
                 # Zoom both canvases to the combined bounding box
-                self.zoom_to_feature_on_canvas(extent, self.left_canvas, self.selected_layer, feature_id)
+                if self.is_feature_merged:
+                    self.zoom_to_merged_features_on_canvas(extent, self.left_canvas, self.selected_layer, feature_id)
+                else:
+                    self.zoom_to_feature_on_canvas(extent, self.left_canvas, self.selected_layer, feature_id)
                 self.zoom_to_feature_on_canvas(extent, self.right_canvas, self.temporary_layer, feature_id)
-            else:
-                QgsMessageLog.logMessage(
-                    f"No features found with feature_id {feature_id} in the .amrut file.",
-                    "AMRUT",
-                    Qgis.Warning
-                )
+
+    def zoom_to_merged_features_on_canvas(self, extent, canvas, layer, feature_id):
+        """Zoom to the bounding box of all features with the same feature_id."""
+        if layer:
+            # Combine feature_id with merged_ids
+            all_feature_ids = set(self.merged_ids)  # Convert to set to avoid duplicates
+            all_feature_ids.add(feature_id)    # Ensure the original feature_id is included
+
+            # Convert to SQL-friendly format
+            feature_ids_str = ", ".join(map(str, all_feature_ids))
+            layer.setSubsetString(f"feature_id IN ({feature_ids_str})")  # Filter layer to show all matching features
+        canvas.setExtent(extent)
+        canvas.refresh()
 
     def zoom_to_feature_on_canvas(self, extent, canvas, layer, feature_id):
         """Zoom to the bounding box of all features with the same feature_id."""
@@ -304,28 +358,95 @@ class VerificationDialog:
         feature_id = int(list(feature_ids)[self.current_feature_index])  # Get the current feature ID
         features = [f for f in self.temporary_layer.getFeatures(f"feature_id = {feature_id}")]  # Fetch all matching features
         if features:
-            selected_attributes = features[0].attributes()
             self.temporary_layer.startEditing()  # Start editing the temporary layer
             
             for feature in features:
                 self.temporary_layer.deleteFeature(feature.id())  # Delete each feature
 
-        if (self.new_features_checked):
-            # Copy the feature from selected layer having the same feature_id to temporary layer
-            selected_feature = next(self.selected_layer.getFeatures(f"feature_id = {feature_id}"), None)
-            if selected_feature:
-                # Get the attributes from the selected feature and create a new feature for the temporary layer
-                selected_geometry = selected_feature.geometry()
+            if self.new_features_checked:
+                if self.is_feature_merged:
+                    # Restore both feature_id and all merged features from removed_features
+                    feature_ids_to_restore = {feature_id} | set(self.merged_ids)  # Combine into a set to avoid duplicates
 
-                # Create a new feature with the selected attributes and geometry
-                temp_feature = QgsFeature()
-                temp_feature.setGeometry(selected_geometry)
-                
-                # Set the attributes, matching the temporary layer's attribute order
-                temp_feature.setAttributes(selected_attributes)
-                
-                # Add the feature to the temporary layer
-                self.temporary_layer.addFeature(temp_feature)
+                    for fid in feature_ids_to_restore:
+                        selected_feature = next(self.selected_layer.getFeatures(f"feature_id = {fid}"), None)
+                        if selected_feature:
+                            # Get the attributes and geometry
+                            selected_geometry = selected_feature.geometry()
+
+                            # Create a new feature for the temporary layer
+                            temp_feature = QgsFeature()
+                            temp_feature.setGeometry(selected_geometry)
+
+                            # Get fields from the temporary layer
+                            temp_layer_fields = self.temporary_layer.fields()
+                            primary_key_fields = self.temporary_layer.primaryKeyAttributes()  # Get primary key(s)
+
+                            # Get the selected feature's attributes
+                            selected_fields = selected_feature.fields()
+
+                            # Prepare final attributes (excluding primary key)
+                            final_attributes = []
+
+                            for field in temp_layer_fields:
+                                field_name = field.name()
+
+                                # Skip primary key fields
+                                if field_name in primary_key_fields:
+                                    continue
+
+                                # Assign value or set NULL
+                                if field_name in selected_fields.names():
+                                    value = selected_feature[field_name]
+                                    final_attributes.append(value if value is not None else QVariant())  # QGIS treats QVariant() as NULL
+                                else:
+                                    final_attributes.append(QVariant())  # Missing fields set to NULL
+
+                            # Set attributes
+                            temp_feature.setAttributes(final_attributes)
+
+                            self.temporary_layer.addFeature(temp_feature)
+                else:
+                    # Copy the feature from selected layer having the same feature_id to temporary layer
+                    selected_feature = next(self.selected_layer.getFeatures(f"feature_id = {feature_id}"), None)
+                    if selected_feature:
+                        # Get the attributes from the selected feature and create a new feature for the temporary layer
+                        selected_geometry = selected_feature.geometry()
+
+                        # Create a new feature with the selected attributes and geometry
+                        temp_feature = QgsFeature()
+                        temp_feature.setGeometry(selected_geometry)
+                        
+                        # Get fields from the temporary layer
+                        temp_layer_fields = self.temporary_layer.fields()
+                        primary_key_fields = self.temporary_layer.primaryKeyAttributes()  # Get primary key(s)
+
+                        # Get the selected feature's attributes
+                        selected_feature = features[0]
+                        selected_fields = selected_feature.fields()
+
+                        # Prepare final attributes (excluding primary key)
+                        final_attributes = []
+
+                        for field in temp_layer_fields:
+                            field_name = field.name()
+
+                            # Skip primary key fields
+                            if field_name in primary_key_fields:
+                                continue
+
+                            # Assign value or set NULL
+                            if field_name in selected_fields.names():
+                                value = selected_feature[field_name]
+                                final_attributes.append(value if value is not None else QVariant())  # QGIS treats QVariant() as NULL
+                            else:
+                                final_attributes.append(QVariant())  # Missing fields set to NULL
+
+                        # Set attributes
+                        temp_feature.setAttributes(final_attributes)
+
+                        self.temporary_layer.addFeature(temp_feature)
+
         self.temporary_layer.commitChanges()  # Save the changes
         self.move_to_next_feature(feature_ids)  # Move to the next feature in the list
 
@@ -334,6 +455,8 @@ class VerificationDialog:
         Move to the next feature in the list.
         If no more features remain, close the dialog.
         """
+        self.is_feature_merged = False
+        self.merged_ids = []
         self.selected_layer.setSubsetString("")  # Reset the filter to show all features
         self.temporary_layer.setSubsetString("")
         self.current_feature_index += 1  # Increment the feature index
@@ -347,6 +470,7 @@ class VerificationDialog:
             else:
                 self.set_colour_opacity(self.temporary_layer, 1)  # Reset the opacity 
                 self.set_colour_opacity(self.selected_layer, 1)
+                self.removed_features = set()
                 self.approve_or_reject_layer()
 
     def set_colour_opacity(self, layer, opacity):
