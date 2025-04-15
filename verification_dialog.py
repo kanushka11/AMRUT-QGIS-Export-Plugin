@@ -20,6 +20,7 @@ class VerificationDialog:
         self.amrut_file_path = amrut_file_path
         self.grid_extent = grid_extent
         self.new_features_checked = False
+        self.deleted_features_checked = False
 
     def check_for_new_features(self):
         """
@@ -37,7 +38,26 @@ class VerificationDialog:
                     self.new_feature_ids.add(temp_feature_id)
 
             self.show_new_features_dialog(self.new_feature_ids, "New Features")
-    
+
+    def check_for_deleted_features(self):
+        """
+        Check for features in the temporary layer that have the 'delete' attribute set to True.
+        Only consider the attribute if it exists in the feature's fields.
+        """
+        if self.temporary_layer:
+            deleted_feature_ids = set()
+
+            for feature in self.temporary_layer.getFeatures():
+                # Check if 'delete' attribute exists in the feature
+                if 'delete' in feature.fields().names():
+                    delete_value = feature.attribute('delete')
+                    if delete_value is True:
+                        feature_id = feature.attribute('feature_id')
+                        if feature_id is not None:
+                            deleted_feature_ids.add(feature_id)
+
+            self.show_new_features_dialog(deleted_feature_ids, "Deleted Features")
+
     def check_for_geom_changes(self):
         grid_inward_buffer = self.create_inward_buffer(self.grid_extent)
         if self.selected_layer and self.temporary_layer:
@@ -107,9 +127,15 @@ class VerificationDialog:
             button_layout.addWidget(proceed_button, alignment=Qt.AlignCenter)  # Add button to the layout
             proceed_button.setFixedWidth(75)  # Set a fixed width for the button
             layout.addLayout(button_layout)  # Add the button layout to the main layout
-            if(self.new_features_checked == False):
-                self.new_features_checked = True
-                proceed_button.clicked.connect(lambda: self.close_dialog_and_execute(dialog, self.check_for_geom_changes))
+            if(not self.new_features_checked or not self.deleted_features_checked):
+                if (self.deleted_features_checked == False):
+                    self.deleted_features_checked = True
+                    proceed_button.clicked.connect(
+                        lambda: self.close_dialog_and_execute(dialog, self.check_for_deleted_features))
+                if(self.new_features_checked == False) :
+                    self.new_features_checked = True
+                    proceed_button.clicked.connect(lambda: self.close_dialog_and_execute(dialog, self.check_for_geom_changes))
+
             else:
                 proceed_button.clicked.connect(lambda: self.close_dialog_and_execute(dialog, self.approve_or_reject_layer))
         dialog.exec_()  # Display the dialog
@@ -152,6 +178,7 @@ class VerificationDialog:
         button_layout.setSpacing(25) 
         reject_button = QPushButton("Reject Vetted Feature") 
         accept_button = QPushButton("Accept Vetted Feature")
+        resurvey_button = QPushButton("Resurvey Area")
         # Modify the width of the buttons
         accept_button.setFixedWidth(120)  # Set a fixed width for the accept button
         reject_button.setFixedWidth(120)  # Set a fixed width for the reject button
@@ -159,10 +186,13 @@ class VerificationDialog:
         # Modify the color of the buttons
         accept_button.setStyleSheet("background-color: green; color: white;")
         reject_button.setStyleSheet("background-color: red; color: white;")
+        resurvey_button.setStyleSheet("background-color: orange; color: white;")
         accept_button.setCursor(Qt.PointingHandCursor)
         reject_button.setCursor(Qt.PointingHandCursor)
+        resurvey_button.setCursor(Qt.PointingHandCursor)
         button_layout.addWidget(reject_button)  # Add the reject button to the layout
         button_layout.addWidget(accept_button)  # Add the accept button to the layout
+        button_layout.addWidget(resurvey_button) # Add the resurvey button to the layout
         button_layout.setAlignment(Qt.AlignCenter)
         main_layout.addLayout(button_layout)  # Add the button layout to the main layout
 
@@ -313,9 +343,13 @@ class VerificationDialog:
             self.update_canvases(feature_ids)  # Update canvases to display the next feature
         else:
             self.dialog.close()  # Close the verification dialog
-            if(self.new_features_checked == False):
-                self.new_features_checked = True
-                self.check_for_geom_changes()
+            if(self.new_features_checked == False or self.deleted_features_checked == False):
+                if(self.new_features_checked == False) :
+                    self.new_features_checked = True
+                    self.check_for_deleted_features()
+                if(self.deleted_features_checked == False) :
+                    self.deleted_features_checked = True
+                    self.check_for_geom_changes()
             else:
                 self.set_colour_opacity(self.temporary_layer, 1)  # Reset the opacity 
                 self.set_colour_opacity(self.selected_layer, 1)
