@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButt
 from PyQt5.QtCore import Qt, QVariant
 from qgis.core import QgsProject, QgsRectangle, QgsGeometry, QgsMessageLog, Qgis, QgsWkbTypes, QgsVectorFileWriter, QgsFeature, QgsCoordinateTransformContext
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
-from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QColor, QFont
 from math import cos, radians
 import zipfile
 import os
@@ -21,6 +21,7 @@ class VerificationDialog:
         self.amrut_file_path = amrut_file_path
         self.grid_extent = grid_extent
         self.new_features_checked = False
+        self.deleted_features_checked = False
         self.is_feature_merged = False
         self.removed_features = set()
         self.merged_ids = []
@@ -41,7 +42,26 @@ class VerificationDialog:
                     self.new_feature_ids.add(temp_feature_id)
 
             self.show_new_features_dialog(self.new_feature_ids, "New Features")
-    
+
+    def check_for_deleted_features(self):
+        """
+        Check for features in the temporary layer that have the 'delete' attribute set to True.
+        Only consider the attribute if it exists in the feature's fields.
+        """
+        if self.temporary_layer:
+            deleted_feature_ids = set()
+
+            for feature in self.temporary_layer.getFeatures():
+                # Check if 'delete' attribute exists in the feature
+                if 'delete' in feature.fields().names():
+                    delete_value = feature.attribute('delete')
+                    if delete_value is True:
+                        feature_id = feature.attribute('feature_id')
+                        if feature_id is not None:
+                            deleted_feature_ids.add(feature_id)
+
+            self.show_new_features_dialog(deleted_feature_ids, "Deleted Features")
+
     def check_for_geom_changes(self):
         grid_inward_buffer = self.create_inward_buffer(self.grid_extent)
         if self.selected_layer and self.temporary_layer:
@@ -114,11 +134,16 @@ class VerificationDialog:
             button_layout.addWidget(proceed_button, alignment=Qt.AlignCenter)  # Add button to the layout
             proceed_button.setFixedWidth(75)  # Set a fixed width for the button
             layout.addLayout(button_layout)  # Add the button layout to the main layout
+
             if(self.new_features_checked == False):
                 self.new_features_checked = True
+                proceed_button.clicked.connect(lambda: self.close_dialog_and_execute(dialog, self.check_for_deleted_features))
+            elif(self.deleted_features_checked == False):
+                self.deleted_features_checked = True
                 proceed_button.clicked.connect(lambda: self.close_dialog_and_execute(dialog, self.check_for_geom_changes))
             else:
                 proceed_button.clicked.connect(lambda: self.close_dialog_and_execute(dialog, self.approve_or_reject_layer))
+
         dialog.exec_()  # Display the dialog
 
     def close_dialog_and_execute(self, dialog, function):
@@ -150,7 +175,7 @@ class VerificationDialog:
         # Add canvases for selected and temporary layers
         left_canvas_frame = self.create_canvas_frame("Original Data", self.selected_layer)
         canvas_layout.addWidget(left_canvas_frame)  # Add the left canvas to the layout
-        right_canvas_frame = self.create_canvas_frame("Vetted Data", self.temporary_layer)
+        right_canvas_frame = self.create_canvas_frame("Vetted Data", self.temporary_layer,show_cross=self.new_features_checked and not self.deleted_features_checked)
         canvas_layout.addWidget(right_canvas_frame)  # Add the right canvas to the layout
         main_layout.addLayout(canvas_layout)  # Add the canvas layout to the main layout
 
@@ -159,6 +184,7 @@ class VerificationDialog:
         button_layout.setSpacing(25) 
         reject_button = QPushButton("Reject Vetted Feature") 
         accept_button = QPushButton("Accept Vetted Feature")
+        resurvey_button = QPushButton("Resurvey Area")
         # Modify the width of the buttons
         accept_button.setFixedWidth(120)  # Set a fixed width for the accept button
         reject_button.setFixedWidth(120)  # Set a fixed width for the reject button
@@ -166,10 +192,14 @@ class VerificationDialog:
         # Modify the color of the buttons
         accept_button.setStyleSheet("background-color: green; color: white;")
         reject_button.setStyleSheet("background-color: red; color: white;")
+        resurvey_button.setStyleSheet("background-color: orange; color: white;")
         accept_button.setCursor(Qt.PointingHandCursor)
         reject_button.setCursor(Qt.PointingHandCursor)
-        button_layout.addWidget(reject_button)  # Add the reject button to the layout
+        resurvey_button.setCursor(Qt.PointingHandCursor)
+        if((self.new_features_checked and self.deleted_features_checked) or (not self.new_features_checked and not self.deleted_features_checked)):
+            button_layout.addWidget(reject_button)  # Add the reject button to the layout
         button_layout.addWidget(accept_button)  # Add the accept button to the layout
+        button_layout.addWidget(resurvey_button) # Add the resurvey button to the layout
         button_layout.setAlignment(Qt.AlignCenter)
         main_layout.addLayout(button_layout)  # Add the button layout to the main layout
 
@@ -219,25 +249,50 @@ class VerificationDialog:
         except Exception as e:
             QgsMessageLog.logMessage(f"Error in setup_panning: {str(e)}", 'AMRUT', Qgis.Critical)
 
-    def create_canvas_frame(self, label_text, layer):
+    def create_canvas_frame(self, label_text, layer, show_cross=False):
         """Create a frame with a label and a map canvas."""
-        frame = QFrame()  # Create a container frame
-        frame_layout = QVBoxLayout(frame)  # Set a vertical layout for the frame
+        frame = QFrame()
+        frame_layout = QVBoxLayout(frame)
 
-        label = QLabel(label_text)  # Create a label with the provided text
-        label.setAlignment(Qt.AlignCenter)  # Center-align the label text
-        label.setStyleSheet("font-size: 12px; font-weight: bold;")  # Set font size and bold style
-        frame_layout.addWidget(label)  # Add the label to the frame layout
+        label = QLabel(label_text)
+        label.setAlignment(Qt.AlignCenter)
+        label.setStyleSheet("font-size: 12px; font-weight: bold;")
+        frame_layout.addWidget(label)
 
-        canvas = QgsMapCanvas()  # Create a map canvas
-        self.set_colour_opacity(self.temporary_layer, 0.6)  # Adjust the opacity for better visualization
+        canvas = QgsMapCanvas()
+        self.set_colour_opacity(self.temporary_layer, 0.6)
         self.set_colour_opacity(self.selected_layer, 0.6)
         canvas.setLayers([layer, self.selected_raster_layer])
-        canvas.setCanvasColor(QColor("white"))  # Set the canvas background color to white
-        canvas.setMapTool(QgsMapToolPan(canvas))  # Enable panning on the canvas
-        frame_layout.addWidget(canvas)  # Add the canvas to the frame layout
+        canvas.setCanvasColor(QColor("white"))
+        canvas.setMapTool(QgsMapToolPan(canvas))
 
-        return frame  # Return the completed frame
+        canvas_container = QFrame()
+        canvas_layout = QVBoxLayout(canvas_container)
+        canvas_layout.setContentsMargins(0, 0, 0, 0)
+        canvas_layout.addWidget(canvas)
+
+        if show_cross:
+            cross_label = QLabel("✖")
+            cross_label.setAlignment(Qt.AlignCenter)
+            cross_label.setStyleSheet("color: red; font-size: 80px;")  # Slightly smaller and cleaner
+            cross_label.setFont(QFont("Arial", 80, QFont.Normal))  # Use Normal instead of Bold
+            cross_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+            cross_label.setParent(canvas)
+            cross_label.resize(canvas.size())
+            cross_label.show()
+
+            # Resize cross with canvas
+            original_resize_event = canvas.resizeEvent
+
+            def on_resize(event):
+                cross_label.resize(canvas.size())
+                if original_resize_event:
+                    original_resize_event(event)
+
+            canvas.resizeEvent = on_resize
+
+        frame_layout.addWidget(canvas_container)
+        return frame
 
     def update_canvases(self, feature_ids):
         """
@@ -347,6 +402,13 @@ class VerificationDialog:
                 self.temporary_layer.updateFeature(feature)  # Apply the change
             
             self.temporary_layer.commitChanges()  # Save changes
+
+        # Delete the feature if condition is met
+        if self.new_features_checked and not self.deleted_features_checked:
+            self.temporary_layer.startEditing()
+            ids_to_delete = [f.id() for f in self.temporary_layer.getFeatures(f"feature_id = {feature_id}")]
+            self.temporary_layer.deleteFeatures(ids_to_delete)
+            self.temporary_layer.commitChanges()
 
         self.move_to_next_feature(feature_ids)  # Move to the next feature
 
@@ -464,9 +526,13 @@ class VerificationDialog:
             self.update_canvases(feature_ids)  # Update canvases to display the next feature
         else:
             self.dialog.close()  # Close the verification dialog
-            if(self.new_features_checked == False):
-                self.new_features_checked = True
-                self.check_for_geom_changes()
+            if(self.new_features_checked == False or self.deleted_features_checked == False):
+                if(self.new_features_checked == False) :
+                    self.new_features_checked = True
+                    self.check_for_deleted_features()
+                if(self.deleted_features_checked == False) :
+                    self.deleted_features_checked = True
+                    self.check_for_geom_changes()
             else:
                 self.set_colour_opacity(self.temporary_layer, 1)  # Reset the opacity 
                 self.set_colour_opacity(self.selected_layer, 1)
