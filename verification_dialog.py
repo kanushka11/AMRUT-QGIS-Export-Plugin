@@ -666,22 +666,6 @@ class VerificationDialog:
         accept_button.clicked.connect(lambda: self.close_dialog_and_execute(dialog, self.accept_data))
         dialog.exec_()  # Display the dialog
 
-    def sanitize_attributes(self, layer):
-        with edit(layer):
-            for f in layer.getFeatures():
-                fid = f.id()
-                for i, field in enumerate(layer.fields()):
-                    val = f[i]
-                    # Convert dict, list, or QVariantMap types to string or None
-                    if isinstance(val, (dict, list)) or "QVariantMap" in str(type(val)):
-                        if not val:  # If it's an empty dict or list
-                            safe_val = None  # You can also use an empty string "" if preferred
-                        else:
-                            try:
-                                safe_val = json.dumps(val)  # Serialize non-empty dict/list
-                            except Exception:
-                                safe_val = str(val)
-                        layer.changeAttributeValue(fid, i, safe_val)
     def accept_data(self):
         """Replace old GeoJSON file in .amrut file with new GeoJSON file and update metadata.json."""
         has_resurvey_data = bool(getattr(self, "resurvey", []))
@@ -742,7 +726,6 @@ class VerificationDialog:
             options = QgsVectorFileWriter.SaveVectorOptions()
             options.driverName = "GeoJSON"
             options.forceMulti = True  # Ensures consistent geometry type
-            self.sanitize_attributes(self.temporary_layer)
             error = QgsVectorFileWriter.writeAsVectorFormatV2(
                 self.temporary_layer,
                 geojson_file_path,
@@ -776,8 +759,22 @@ class VerificationDialog:
                         arcname = os.path.relpath(file_path, temp_dir)
                         zip_ref.write(file_path, arcname)
 
-            # Replace the original .amrut file with the updated one
-            os.replace(temp_amrut_path, self.amrut_file_path)
+            # Rename output if resurvey data is present
+            if has_resurvey_data:
+                directory = os.path.dirname(self.amrut_file_path)
+                original_filename = os.path.basename(self.amrut_file_path)
+                new_filename = f"resurvey_required_{original_filename}"
+                new_amrut_path = os.path.join(directory, new_filename)
+
+                # Rename the original file
+                os.rename(self.amrut_file_path, new_amrut_path)
+
+                # Replace the renamed file with updated content
+                os.replace(temp_amrut_path, new_amrut_path)
+            else:
+                # Replace original file with updated one
+                os.replace(temp_amrut_path, self.amrut_file_path)
+
             QgsMessageLog.logMessage(
                 f"GeoJSON file '{geojson_filename}' successfully replaced in the AMRUT file. QC Status: {qc_status}",
                 "AMRUT",
