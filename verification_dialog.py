@@ -26,7 +26,7 @@ class VerificationDialog:
         self.is_feature_merged = False
         self.removed_features = set()
         self.merged_ids = []
-        self.resurvey_data = []
+        self.resurvey = []
 
     def check_for_new_features(self):
         """
@@ -528,9 +528,7 @@ class VerificationDialog:
                 "coordinate": coordinate_value
             }
             # Convert the dictionary to a JSON string
-            resurvey_data_json = json.dumps(resurvey_obj)
-            self.resurvey_data.append(resurvey_data_json)
-            print(self.resurvey_data)
+            self.resurvey.append(resurvey_obj)
             resurvey_dialog.accept()  # Close the dialog
             self.move_to_next_feature(feature_ids)  # Move to the next feature in the list
 
@@ -636,6 +634,7 @@ class VerificationDialog:
 
     def accept_data(self):
         """Replace old GeoJSON file in .amrut file with new GeoJSON file and update metadata.json."""
+        has_resurvey_data = bool(getattr(self, "resurvey", []))
         temp_dir = None
         try:
             geojson_filename = f"{self.selected_layer.name()}.geojson"
@@ -705,8 +704,16 @@ class VerificationDialog:
             # Write the updated metadata.json back to the temporary directory
             metadata_path = os.path.join(temp_dir, "metadata.json")
             with open(metadata_path, "w") as metadata_file:
-                if qc_status != None:
-                    metadata["qc_status"] = qc_status  # Update QC status
+                if has_resurvey_data:
+                    # Add resurvey_data to metadata
+                    metadata["resurvey"] = self.resurvey
+
+                    # Remove qc_status and layers_qc_completed if they exist
+                    metadata.pop("qc_status", None)
+                    metadata.pop("layers_qc_completed", None)
+                else: 
+                    if qc_status != None:
+                        metadata["qc_status"] = qc_status  # Update QC status
                 json.dump(metadata, metadata_file, indent=4)
 
             # Create a new .amrut file with the updated GeoJSON and metadata
