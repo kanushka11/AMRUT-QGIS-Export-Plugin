@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame, QMessageBox, QLineEdit, QTextEdit
 from PyQt5.QtCore import Qt, QVariant
-from qgis.core import QgsProject, QgsRectangle, QgsGeometry, QgsMessageLog, Qgis, QgsWkbTypes, QgsVectorFileWriter, QgsFeature, QgsCoordinateTransformContext
+from qgis.core import QgsProject, QgsRectangle, QgsGeometry, QgsMessageLog, Qgis, QgsWkbTypes, QgsVectorFileWriter, edit, QgsFeature, QgsCoordinateTransformContext
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
 from PyQt5.QtGui import QColor, QFont, QTextOption
 from math import cos, radians
@@ -666,6 +666,22 @@ class VerificationDialog:
         accept_button.clicked.connect(lambda: self.close_dialog_and_execute(dialog, self.accept_data))
         dialog.exec_()  # Display the dialog
 
+    def sanitize_attributes(self, layer):
+        with edit(layer):
+            for f in layer.getFeatures():
+                fid = f.id()
+                for i, field in enumerate(layer.fields()):
+                    val = f[i]
+                    # Convert dict, list, or QVariantMap types to string or None
+                    if isinstance(val, (dict, list)) or "QVariantMap" in str(type(val)):
+                        if not val:  # If it's an empty dict or list
+                            safe_val = None  # You can also use an empty string "" if preferred
+                        else:
+                            try:
+                                safe_val = json.dumps(val)  # Serialize non-empty dict/list
+                            except Exception:
+                                safe_val = str(val)
+                        layer.changeAttributeValue(fid, i, safe_val)
     def accept_data(self):
         """Replace old GeoJSON file in .amrut file with new GeoJSON file and update metadata.json."""
         has_resurvey_data = bool(getattr(self, "resurvey", []))
@@ -726,6 +742,7 @@ class VerificationDialog:
             options = QgsVectorFileWriter.SaveVectorOptions()
             options.driverName = "GeoJSON"
             options.forceMulti = True  # Ensures consistent geometry type
+            self.sanitize_attributes(self.temporary_layer)
             error = QgsVectorFileWriter.writeAsVectorFormatV2(
                 self.temporary_layer,
                 geojson_file_path,
