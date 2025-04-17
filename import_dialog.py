@@ -204,6 +204,11 @@ class ImportDialog(QDialog):
                     QMessageBox.information(self, "File Verified", "All layers of this file have been verified.")
                     self.file_input.clear()
                     return
+                
+                if "resurvey" in metadata and len(metadata["resurvey"]) > 0:
+                    QMessageBox.information(self, "Marked for Re-Survey", "File has already been marked for Re-Survey.")
+                    self.file_input.clear()
+                    return
 
                 if 'layers' not in metadata or not isinstance(metadata['layers'], list):
                     QMessageBox.warning(self, "Invalid Metadata", "'layers' array is missing or invalid in metadata.json.")
