@@ -1,8 +1,8 @@
-from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame, QMessageBox
+from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame, QMessageBox, QLineEdit, QTextEdit
 from PyQt5.QtCore import Qt, QVariant
 from qgis.core import QgsProject, QgsRectangle, QgsGeometry, QgsMessageLog, Qgis, QgsWkbTypes, QgsVectorFileWriter, QgsFeature, QgsCoordinateTransformContext
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtGui import QColor, QFont, QTextOption
 from math import cos, radians
 import zipfile
 import os
@@ -14,7 +14,8 @@ import random
 class VerificationDialog:
     def __init__(self, selected_layer_name, selected_raster_layer_name, amrut_file_path, grid_extent):
         # Fetch the layer based on its name
-        self.selected_layer = self.get_layer_by_name(selected_layer_name)
+        self.selected_layer_name = selected_layer_name
+        self.selected_layer = self.get_layer_by_name(self.selected_layer_name)
         self.selected_raster_layer = self.get_layer_by_name(f"Temporary_{selected_raster_layer_name}")
         self.temporary_layer = self.get_layer_by_name(f"Temporary_{selected_layer_name}")
 
@@ -25,6 +26,7 @@ class VerificationDialog:
         self.is_feature_merged = False
         self.removed_features = set()
         self.merged_ids = []
+        self.resurvey = []
 
     def check_for_new_features(self):
         """
@@ -216,6 +218,7 @@ class VerificationDialog:
 
         accept_button.clicked.connect(lambda: self.accept_feature(feature_ids))
         reject_button.clicked.connect(lambda: self.reject_feature(feature_ids))
+        resurvey_button.clicked.connect(lambda: self.resurvey_feature(feature_ids))
 
         # Update the canvases to focus on the first feature
         self.update_canvases(feature_ids)
@@ -340,7 +343,6 @@ class VerificationDialog:
 
                 # Ensure valid bounding box (for single points, use a small default box)
                 if bbox is None or (bbox.width() == 0 and bbox.height() == 0):
-                    print("Helloooooooo")
                     centroid = features[0].geometry().centroid().asPoint()
                     buffer = self.calculate_dynamic_buffer(features[0].geometry())
                     extent = QgsRectangle(
@@ -512,6 +514,62 @@ class VerificationDialog:
         self.temporary_layer.commitChanges()  # Save the changes
         self.move_to_next_feature(feature_ids)  # Move to the next feature in the list
 
+    def resurvey_feature(self, feature_ids):
+        feature_id = int(list(feature_ids)[self.current_feature_index])  # Get the current feature ID
+        features = [f for f in self.temporary_layer.getFeatures(f"feature_id = {feature_id}")]  # Fetch all matching features
+        if features:
+            feature = features[0]
+            geometry = feature.geometry()
+            centroid = geometry.centroid()
+            coordinate_value = centroid.asPoint()  # Get the coordinates of the centroid
+
+            # Convert the centroid to a string or tuple of coordinates (x, y)
+            coordinate_value = (coordinate_value.x(), coordinate_value.y())
+
+        # Create the resurvey dialog
+        resurvey_dialog = QDialog(self.dialog)
+        resurvey_dialog.setWindowTitle("Resurvey Area - Add Reason")
+        resurvey_dialog.setMinimumSize(400, 100)
+
+        layout = QVBoxLayout(resurvey_dialog)
+
+        label = QLabel("Please enter a reason for resurveying this area:")
+        layout.addWidget(label)
+
+        reason_input = QTextEdit()
+        reason_input.setFixedHeight(70)  # Set a fixed height for the QTextEdit
+        reason_input.setFixedWidth(400)  # Set a fixed width for the QTextEdit
+        reason_input.setWordWrapMode(True)  # Ensure the text wraps properly
+        layout.addWidget(reason_input)
+
+        send_button = QPushButton("Send to Resurvey")
+        send_button.setEnabled(False)  # Initially disabled
+        layout.addWidget(send_button)
+
+        # Enable button only if there is some input
+        def on_text_changed():
+            send_button.setEnabled(bool(reason_input.toPlainText().strip()))
+
+        # The textChanged signal provides a text argument, so we modify the function to accept it.
+        reason_input.textChanged.connect(on_text_changed)
+
+        def on_send_clicked():
+            resurvey_message = reason_input.toPlainText().strip()  # Store message in instance variable
+            # Create a dictionary with the required key-value pairs
+            resurvey_obj = {
+                "message": resurvey_message,
+                "layer": self.selected_layer_name,
+                "coordinate": coordinate_value
+            }
+            # Convert the dictionary to a JSON string
+            self.resurvey.append(resurvey_obj)
+            resurvey_dialog.accept()  # Close the dialog
+            self.move_to_next_feature(feature_ids)  # Move to the next feature in the list
+
+        send_button.clicked.connect(on_send_clicked)
+
+        resurvey_dialog.exec_()
+
     def move_to_next_feature(self, feature_ids):
         """
         Move to the next feature in the list.
@@ -526,13 +584,12 @@ class VerificationDialog:
             self.update_canvases(feature_ids)  # Update canvases to display the next feature
         else:
             self.dialog.close()  # Close the verification dialog
-            if(self.new_features_checked == False or self.deleted_features_checked == False):
-                if(self.new_features_checked == False) :
-                    self.new_features_checked = True
-                    self.check_for_deleted_features()
-                if(self.deleted_features_checked == False) :
-                    self.deleted_features_checked = True
-                    self.check_for_geom_changes()
+            if(self.new_features_checked == False) :
+                self.new_features_checked = True
+                self.check_for_deleted_features()
+            elif(self.deleted_features_checked == False) :
+                self.deleted_features_checked = True
+                self.check_for_geom_changes()
             else:
                 self.set_colour_opacity(self.temporary_layer, 1)  # Reset the opacity 
                 self.set_colour_opacity(self.selected_layer, 1)
@@ -611,6 +668,7 @@ class VerificationDialog:
 
     def accept_data(self):
         """Replace old GeoJSON file in .amrut file with new GeoJSON file and update metadata.json."""
+        has_resurvey_data = bool(getattr(self, "resurvey", []))
         temp_dir = None
         try:
             geojson_filename = f"{self.selected_layer.name()}.geojson"
@@ -680,8 +738,16 @@ class VerificationDialog:
             # Write the updated metadata.json back to the temporary directory
             metadata_path = os.path.join(temp_dir, "metadata.json")
             with open(metadata_path, "w") as metadata_file:
-                if qc_status != None:
-                    metadata["qc_status"] = qc_status  # Update QC status
+                if has_resurvey_data:
+                    # Add resurvey_data to metadata
+                    metadata["resurvey"] = self.resurvey
+
+                    # Remove qc_status and layers_qc_completed if they exist
+                    metadata.pop("qc_status", None)
+                    metadata.pop("layers_qc_completed", None)
+                else: 
+                    if qc_status != None:
+                        metadata["qc_status"] = qc_status  # Update QC status
                 json.dump(metadata, metadata_file, indent=4)
 
             # Create a new .amrut file with the updated GeoJSON and metadata
