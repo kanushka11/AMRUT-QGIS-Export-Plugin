@@ -536,11 +536,32 @@ class VerificationDialog:
         label = QLabel("Please enter a reason for resurveying this area:")
         layout.addWidget(label)
 
+        # Create the QTextEdit and the countdown label
         reason_input = QTextEdit()
-        reason_input.setFixedHeight(70)  # Set a fixed height for the QTextEdit
-        reason_input.setFixedWidth(400)  # Set a fixed width for the QTextEdit
-        reason_input.setWordWrapMode(True)  # Ensure the text wraps properly
+        reason_input.setFixedHeight(70)
+        reason_input.setFixedWidth(400)
+        reason_input.setWordWrapMode(True)
+
+        char_limit = 100
+        char_count_label = QLabel(f"{char_limit} / {char_limit}")
+        char_count_label.setAlignment(Qt.AlignRight)
+
+        # Update countdown on text change
+        def on_text_changed():
+            text = reason_input.toPlainText()
+            if len(text) > char_limit:
+                reason_input.blockSignals(True)
+                reason_input.setPlainText(text[:char_limit])  # Trim extra characters
+                reason_input.moveCursor(reason_input.textCursor().End)  # Move cursor to end
+                reason_input.blockSignals(False)
+            remaining = char_limit - len(reason_input.toPlainText())
+            char_count_label.setText(f"{remaining} / {char_limit}")
+
+        reason_input.textChanged.connect(on_text_changed)
+
+        # Add both to layout
         layout.addWidget(reason_input)
+        layout.addWidget(char_count_label)
 
         send_button = QPushButton("Send to Resurvey")
         send_button.setEnabled(False)  # Initially disabled
@@ -741,13 +762,16 @@ class VerificationDialog:
                 if has_resurvey_data:
                     # Add resurvey_data to metadata
                     metadata["resurvey"] = self.resurvey
-
-                    # Remove qc_status and layers_qc_completed if they exist
-                    metadata.pop("qc_status", None)
-                    metadata.pop("layers_qc_completed", None)
                 else: 
                     if qc_status != None:
                         metadata["qc_status"] = qc_status  # Update QC status
+
+                if "resurvey" in metadata and len(metadata["resurvey"]) > 0 and set(metadata['layers_qc_completed']) == set(layer_names):
+                    print(f"Layers : {layer_names}")
+                    print(f"QC_Completed : {metadata['layers_qc_completed']}")
+                    metadata.pop("qc_status", None)
+                    metadata.pop("layers_qc_completed", None)
+                
                 json.dump(metadata, metadata_file, indent=4)
 
             # Create a new .amrut file with the updated GeoJSON and metadata
