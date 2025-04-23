@@ -216,7 +216,7 @@ class ImportDialog(QDialog):
                     self.file_input.clear()
                     return
                 
-                if "resurvey" in metadata and len(metadata["resurvey"]) > 0:
+                if "resurvey" in metadata and len(metadata["resurvey"]) > 0 and "layers_qc_completed" not in metadata and "qc_status" not in metadata:
                     QMessageBox.information(self, "Marked for Re-Survey", "File has already been marked for Re-Survey.")
                     self.file_input.clear()
                     return
