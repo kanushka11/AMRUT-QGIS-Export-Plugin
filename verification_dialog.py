@@ -760,8 +760,12 @@ class VerificationDialog:
             metadata_path = os.path.join(temp_dir, "metadata.json")
             with open(metadata_path, "w") as metadata_file:
                 if has_resurvey_data:
-                    # Add resurvey_data to metadata
-                    metadata["resurvey"] = self.resurvey
+                    # Check if 'resurvey' key exists and is a list
+                    if "resurvey" in metadata and isinstance(metadata["resurvey"], list):
+                        metadata["resurvey"].extend(self.resurvey)
+                    else:
+                        metadata["resurvey"] = list(self.resurvey)
+
                 else: 
                     if qc_status != None:
                         metadata["qc_status"] = qc_status  # Update QC status
@@ -784,7 +788,7 @@ class VerificationDialog:
                         zip_ref.write(file_path, arcname)
 
             # Rename output if resurvey data is present
-            if has_resurvey_data:
+            if "resurvey" in metadata and len(metadata["resurvey"]) > 0 and "layers_qc_completed" not in metadata and "qc_status" not in metadata:
                 directory = os.path.dirname(self.amrut_file_path)
                 original_filename = os.path.basename(self.amrut_file_path)
                 new_filename = f"resurvey_required_{original_filename}"
