@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame, QMessageBox, QLineEdit, QTextEdit
 from PyQt5.QtCore import Qt, QVariant
-from qgis.core import QgsProject, QgsRectangle, QgsGeometry, QgsMessageLog, Qgis, QgsWkbTypes, QgsVectorFileWriter, edit, QgsFeature, QgsCoordinateTransformContext
+from qgis.core import QgsProject, QgsRectangle, QgsGeometry, QgsMessageLog, QgsCoordinateTransform, Qgis, QgsWkbTypes, QgsVectorFileWriter, edit, QgsFeature, QgsCoordinateTransformContext
 from qgis.gui import QgsMapCanvas, QgsMapToolPan
 from PyQt5.QtGui import QColor, QFont, QTextOption
 from math import cos, radians
@@ -517,14 +517,15 @@ class VerificationDialog:
     def resurvey_feature(self, feature_ids):
         feature_id = int(list(feature_ids)[self.current_feature_index])  # Get the current feature ID
         features = [f for f in self.temporary_layer.getFeatures(f"feature_id = {feature_id}")]  # Fetch all matching features
+        
         if features:
             feature = features[0]
             geometry = feature.geometry()
-            centroid = geometry.centroid()
-            coordinate_value = centroid.asPoint()  # Get the coordinates of the centroid
+            centroid = geometry.pointOnSurface()  # or .centroid()
+            coordinate_value = centroid.asPoint()
 
             # Convert the centroid to a string or tuple of coordinates (x, y)
-            coordinate_value = (coordinate_value.x(), coordinate_value.y())
+            coordinate_value = (coordinate_value.y(), coordinate_value.x())
 
         # Create the resurvey dialog
         resurvey_dialog = QDialog(self.dialog)
