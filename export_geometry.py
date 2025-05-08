@@ -77,14 +77,14 @@ def check_polygon_in_a_layer(layer):
     # Check if "id" attribute exists
     provider = layer.dataProvider()
     existing_fields = [field.name() for field in provider.fields()]
-    
+
     if "id" not in existing_fields:
         print("ID field not found. Adding 'id' field and assigning values...")
-        
+
         # Add "id" field
         provider.addAttributes([QgsField("id", QVariant.Int)])
         layer.updateFields()  # Update layer to reflect new field
-        
+
         # Assign auto-increment values to "id"
         layer.startEditing()
         for i, feature in enumerate(layer.getFeatures(), start=1):
@@ -92,8 +92,16 @@ def check_polygon_in_a_layer(layer):
             layer.updateFeature(feature)
         layer.commitChanges()
 
-    # Check for invalid geometries
+    # Collect all IDs to check for uniqueness
+    ids = []
     for feature in layer.getFeatures():
+        fid = feature["id"]
+        if fid in ids:
+            raise Exception(f"Duplicate 'id' value found: {fid} in layer '{layer.name()}', See attributes table to "
+                            f"eliminate any duplicate values in 'id' field.")
+        ids.append(fid)
+
+        # Check geometry validity
         if not feature.geometry().isGeosValid():
             invalid_geometries.append((layer.name(), feature.id()))
             valid = False
