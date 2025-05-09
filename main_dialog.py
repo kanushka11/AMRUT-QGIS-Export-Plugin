@@ -378,7 +378,7 @@ class ClipMergeExportTabDialog(QDialog):
                     print("Grid Size : "+ str(self.number_input.value()))
                     self.progress_lable.setText("Creating Layer...")
                     self.thread = QThread()
-                    self.layerValidationWorker = workers.GridLayerCeationWorker(selectedLayers, gridLayer, self.number_input.value())
+                    self.layerValidationWorker = workers.GridLayerCreationWorker(selectedLayers, gridLayer, self.number_input.value())
                     self.layerValidationWorker.moveToThread(self.thread)
                     self.thread.started.connect(self.layerValidationWorker.run)
                     self.layerValidationWorker.finished.connect(self.thread.quit)

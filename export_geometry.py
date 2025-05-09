@@ -19,21 +19,32 @@ from qgis.core import (
     QgsTextFormat, 
     QgsVectorLayerSimpleLabeling
 )
-from qgis.core import QgsMessageLog, Qgis
+from qgis.core import QgsMessageLog, Qgis,QgsVectorLayer, QgsRasterLayer, QgsRectangle
 
 import processing
 import os
 
+
 def check_geometries_and_extents(layers):
-    """Check for invalid geometries and ensure layer extents overlap."""
+    """Check for invalid geometries, ensure layer extents overlap, and verify same CRS."""
     invalid_geometries = []
     all_extents = []
     valid = True
     one_raster = False
+    reference_crs = None
 
     for i, layer in enumerate(layers):
         if not layer.isValid():
             raise Exception(f"The layer {layer.name()} is invalid or has been deleted. Please restart QGIS.")
+
+        # CRS check
+        layer_crs = layer.crs()
+        if reference_crs is None:
+            reference_crs = layer_crs
+        elif layer_crs != reference_crs:
+            valid = False
+            raise Exception(f"CRS mismatch: Layer '{layer.name()}' has a different CRS ({layer_crs.authid()}) than the reference CRS ({reference_crs.authid()})."
+                            f"\nPlease make sure that all layers have same CRS.")
 
         if layer.type() == QgsVectorLayer.VectorLayer:
             for feature in layer.getFeatures():
@@ -41,30 +52,31 @@ def check_geometries_and_extents(layers):
                     invalid_geometries.append((layer.name(), feature.id()))
                     valid = False
             all_extents.append(layer.extent())
-        if layer.type() == QgsRasterLayer.RasterLayer :
-            if one_raster :
-                valid = False
-                raise Exception(f"More than One Raster Layer found, the process only supports One raster layer.")
-            else :
+
+        if layer.type() == QgsRasterLayer.RasterLayer:
+            if one_raster:
+                raise Exception("More than one raster layer found. The process only supports one raster layer.")
+            else:
                 one_raster = True
+                all_extents.append(layer.extent())  # You might want to include raster extent as well
 
-
+    # Check if extents overlap
     combined_extent = QgsRectangle()
     for extent in all_extents:
         combined_extent.combineExtentWith(extent)
 
     if combined_extent.isEmpty() and all_extents:
-            valid = False
-            raise Exception("No overlapping extents found among layers.")
+        raise Exception("No overlapping extents found among layers.")
 
+    # Report invalid geometries
     if invalid_geometries:
-        valid = False
         msg = "Invalid geometries detected:\n" + "\n".join(
             [f"Layer: {layer}, Feature ID: {fid}" for layer, fid in invalid_geometries]
         )
         raise Exception(msg)
 
     return valid
+
 
 def check_polygon_in_a_layer(layer):
     valid = True

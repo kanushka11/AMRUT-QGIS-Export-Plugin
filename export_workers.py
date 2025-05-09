@@ -49,7 +49,7 @@ class GridLayerValidationWorker(QObject):
             self.result_signal.emit(False, str(e))
             self.finished.emit() # Emit error message
 
-class GridLayerCeationWorker(QObject):
+class GridLayerCreationWorker(QObject):
 
     layer_signal = pyqtSignal(str)  # Signal to send results back
     error_signal = pyqtSignal(str)

@@ -57,6 +57,7 @@ def create_grid_layer(bbox, grid_size, crs):
     # Add the features (grid cells) to the layer
     provider.addFeatures(grid_cells)
     grid_layer.updateExtents()
+    add_grid_labels(grid_layer)
 
     return grid_layer
 
