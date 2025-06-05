@@ -316,31 +316,17 @@ class ImportDialog(QDialog):
                     return
 
                 # Get raster extent in its original CRS (EPSG:32644)
+                # Get raster extent and transform it properly
                 extent = raster_layer.extent()
-                raster_bounds = {
-                    "north": extent.yMaximum(),
-                    "south": extent.yMinimum(),
-                    "east": extent.xMaximum(),
-                    "west": extent.xMinimum()
-                }
-
-                # Transform raster bounds to WGS 84
-                raster_crs = QgsCoordinateReferenceSystem("EPSG:32644")
+                raster_crs = raster_layer.crs()
                 wgs84 = QgsCoordinateReferenceSystem("EPSG:4326")
-                coord_transform_raster_to_wgs84 = QgsCoordinateTransform(raster_crs, wgs84, QgsProject.instance())
+                coord_transform = QgsCoordinateTransform(raster_crs, wgs84, QgsProject.instance())
 
-                transformed_northwest = coord_transform_raster_to_wgs84.transform(raster_bounds["west"], raster_bounds["north"])
-                transformed_southeast = coord_transform_raster_to_wgs84.transform(raster_bounds["east"], raster_bounds["south"])
-
-                transformed_raster_extent = QgsRectangle(
-                    transformed_northwest.x(), 
-                    transformed_southeast.y(),
-                    transformed_southeast.x(), 
-                    transformed_northwest.y()
-                )
+                # Transform the entire extent
+                transformed_raster_extent = coord_transform.transformBoundingBox(extent)
 
                 # Check if raster extent covers the vector extent
-                if not (transformed_raster_extent.contains(grid_extent)):
+                if not transformed_raster_extent.contains(grid_extent):
                     QMessageBox.warning(self, "Extent Validation Failed", "The grid's extent does not fall within the raster layer's extent.")
                     return
             else:

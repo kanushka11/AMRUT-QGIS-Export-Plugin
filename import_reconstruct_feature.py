@@ -23,12 +23,26 @@ class ReconstructFeatures:
     def __init__(self, selected_layer, selected_raster_layer, data, progress_bar, progress_lable):
         self.selected_layer_for_processing = selected_layer
         self.saved_temp_layer = self.get_layer_by_name("Temporary_"+selected_layer.name())
+        if self.saved_temp_layer:
+            ext = self.saved_temp_layer.extent()
+            QgsMessageLog.logMessage(f"Temp layer extent: {ext.toString()}", 'AMRUT', Qgis.Info)
+        else:
+            QgsMessageLog.logMessage("saved_temp_layer is None!", 'AMRUT', Qgis.Critical)
         self.selected_raster_layer = selected_raster_layer
         self.data = data 
         self.reprojected_raster_layer = None
         self.current_feature_index = 0  # Initialize current_feature_index
         self.progress_bar = progress_bar
         self.progress_lable = progress_lable
+        if self.saved_temp_layer and self.selected_layer_for_processing:
+            if self.saved_temp_layer.crs() != self.selected_layer_for_processing.crs():
+                self.saved_temp_layer.setCrs(self.selected_layer_for_processing.crs())  # Match CRS without transforming
+                QgsMessageLog.logMessage("CRS mismatch detected. Set saved_temp_layer CRS to match original layer.", 'AMRUT', Qgis.Warning)
+
+        if not self.saved_temp_layer or not self.saved_temp_layer.isValid():
+            QgsMessageLog.logMessage("saved_temp_layer is None or invalid!", 'AMRUT', Qgis.Critical)
+        else:
+            QgsMessageLog.logMessage(f"Loaded saved_temp_layer with {self.saved_temp_layer.featureCount()} features", 'AMRUT', Qgis.Info)
 
     def apply_colour(self, layer):
         renderer = QgsCategorizedSymbolRenderer("$id", [])  # Use $id (QGIS internal unique feature ID)
