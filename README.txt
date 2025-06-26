@@ -46,6 +46,7 @@ Sankalan 2.0 is a powerful data transfer plugin designed for seamless integratio
 
 ## Screenshots
 
+
 ### Main Menu
 ![Main Menu](Screenshot%20from%202025-01-17%2017-17-58.png)
 
